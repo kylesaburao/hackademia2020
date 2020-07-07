@@ -15,8 +15,8 @@ starship_image.onload = function () {
 };
 
 
-var starship_x = 0;
-var starship_y = 0;
+var starship_x = main_canvas.width / 2;
+var starship_y = main_canvas.height / 2;
 var starship_dx = 0;
 var starship_dy = 0;
 const max_acceleration_component = 5;
