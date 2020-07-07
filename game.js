@@ -56,8 +56,7 @@ class PhysicsObject {
             context.restore();
         };
 
-        this.calculate_state = function (angle, accelerate) {
-            this.angle = angle;
+        this.calculate_state = function (accelerate) {
             if (accelerate) {
                 this.dx += this.acceleration * Math.sin(this.angle);
                 this.dy -= this.acceleration * Math.cos(this.angle);
@@ -118,24 +117,39 @@ var render = function() {
 var starship = new PhysicsObject('img/starship.png', main_canvas);
 
 var key_pressed = {
-    up: false
+    up: false,
+    left: false,
+    right: false,
 };
 
 document.onkeydown = function(e) {
     if (e.keyCode == 38) {
         key_pressed.up = true;
+    } else if (e.keyCode == 37) {
+        key_pressed.left = true;
+    } else if (e.keyCode == 39) {
+        key_pressed.right = true;
     }
 }
 document.onkeyup = function(e) {
     if (e.keyCode == 38) {
         key_pressed.up = false
+    } else if (e.keyCode == 37) {
+        key_pressed.left = false;
+    } else if (e.keyCode == 39) {
+        key_pressed.right = false;
     }
 }
 
 var loop_func = function() {
     canvas_reset();
-    var target_angle = Math.atan2(mouse.y - starship.y, mouse.x - starship.x) + Math.PI / 2;
-    starship.calculate_state(target_angle, key_pressed.up);
+
+    if (key_pressed.left) {
+        starship.angle -= 0.04;
+    } else if (key_pressed.right) {
+        starship.angle += 0.04;
+    }
+    starship.calculate_state(key_pressed.up);
     starship.clamp_region();
     canvas_context.font = '24px arial'
     canvas_context.fillText('Velocity: ' + starship.velocity.toFixed(3)
