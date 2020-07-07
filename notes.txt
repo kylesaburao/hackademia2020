@@ -1,0 +1,3 @@
+we can simulate velocity by time stepping with a pixels per metre metric
+i.e. if 100pixels = 100 metres, we can easily use setTimeout callback with fixed or actual time
+to determine dx and dy
