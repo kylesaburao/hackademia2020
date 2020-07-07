@@ -151,7 +151,8 @@ var loop_func = function() {
     }
     starship.calculate_state(key_pressed.up);
     starship.clamp_region();
-    canvas_context.font = '24px arial'
+    canvas_context.font = '24px arial';
+    canvas_context.fillStyle = 'white';
     canvas_context.fillText('Velocity: ' + starship.velocity.toFixed(3)
         + ', x component: ' + starship.dx.toFixed(3)
         + ', y component: ' + starship.dy.toFixed(3)
