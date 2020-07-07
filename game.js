@@ -33,9 +33,9 @@ class PhysicsObject {
         this.width = 0.0;
         this.height = 0.0;
         this.angle = 0.0;
+        this.core_angular_offset = 0.0;
         this.velocity = 0.0;
         this.angular_velocity = 0.0;
-        this.acceleration = 0.1;
 
         var image = new Image();
         this.image = image;
@@ -56,16 +56,27 @@ class PhysicsObject {
             context.restore();
         };
 
-        this.calculate_state = function (angle, accelerate) {
-            this.angle = angle;
-            if (accelerate) {
-                this.dx += this.acceleration * Math.sin(this.angle);
-                this.dy -= this.acceleration * Math.cos(this.angle);
-            }
-            if (true) {
-                this.dx += 0.01 * Math.sin(Math.PI);
-                this.dy -= 0.01 * Math.cos(Math.PI);
-            }
+        this.translate_forward = function(acceleration) {
+            this.accelerate(acceleration, 0.0);
+        };
+        this.translate_rear = function(acceleration) {
+            this.accelerate(acceleration, Math.PI);
+        };
+        this.translate_left = function(acceleration) {
+            this.accelerate(acceleration, -Math.PI/2);
+        };
+        this.translate_right = function(acceleration) {
+            this.accelerate(acceleration, Math.PI/2);
+        };
+
+        this.accelerate = function(acceleration, angular_offset=0.0) {
+            this.dx += acceleration * Math.sin(this.angle + this.core_angular_offset + angular_offset);
+            this.dy -= acceleration * Math.cos(this.angle + this.core_angular_offset + angular_offset);
+        };
+
+        this.calculate_state = function (accelerate) {
+            this.angular_velocity = clamp(this.angular_velocity, -0.1, 0.1);
+            this.angle += this.angular_velocity;
             this.dx = clamp(this.dx, -10, 10);
             this.dy = clamp(this.dy, -10, 10);
             this.x += this.dx;
@@ -118,26 +129,78 @@ var render = function() {
 var starship = new PhysicsObject('img/starship.png', main_canvas);
 
 var key_pressed = {
-    up: false
+    up: false,
+    left: false,
+    right: false,
+    down: false,
+    control: false
 };
 
 document.onkeydown = function(e) {
     if (e.keyCode == 38) {
         key_pressed.up = true;
+    } else if (e.keyCode == 37) {
+        key_pressed.left = true;
+    } else if (e.keyCode == 39) {
+        key_pressed.right = true;
+    } else if (e.keyCode == 40) {
+        key_pressed.down = true;
+    } else if (e.keyCode == 17) {
+        key_pressed.control = true;
     }
 }
 document.onkeyup = function(e) {
     if (e.keyCode == 38) {
         key_pressed.up = false
+    } else if (e.keyCode == 37) {
+        key_pressed.left = false;
+    } else if (e.keyCode == 39) {
+        key_pressed.right = false;
+    } else if (e.keyCode == 40) {
+        key_pressed.down = false;
+    } else if (e.keyCode == 17) {
+        key_pressed.control = false;
     }
 }
 
 var loop_func = function() {
     canvas_reset();
-    var target_angle = Math.atan2(mouse.y - starship.y, mouse.x - starship.x) + Math.PI / 2;
-    starship.calculate_state(target_angle, key_pressed.up);
+
+    if (!key_pressed.control) {
+        canvas_context.font = '12px arial';
+        canvas_context.fillStyle = 'white';
+        canvas_context.fillText('Flight mode', 100, 120);
+        if (key_pressed.left) {
+            starship.angular_velocity -= 0.0005;
+        } else if (key_pressed.right) {
+            starship.angular_velocity += 0.0005;
+        }
+
+        if (key_pressed.up) {
+            starship.accelerate(0.1);
+        }
+    } else {
+        canvas_context.font = '12px arial';
+        canvas_context.fillStyle = 'white';
+        canvas_context.fillText('Translation mode', 100, 120);
+        if (key_pressed.down) {
+            starship.translate_rear(0.005);
+        }
+        if (key_pressed.up) {
+            starship.translate_forward(0.005);
+        }
+        if (key_pressed.left) {
+            starship.translate_left(0.005);
+        }
+        if (key_pressed.right) {
+            starship.translate_right(0.005);
+        }
+    }
+
+    starship.calculate_state(key_pressed.up);
     starship.clamp_region();
-    canvas_context.font = '24px arial'
+    canvas_context.font = '20px arial';
+    canvas_context.fillStyle = 'white';
     canvas_context.fillText('Velocity: ' + starship.velocity.toFixed(3)
         + ', x component: ' + starship.dx.toFixed(3)
         + ', y component: ' + starship.dy.toFixed(3)
