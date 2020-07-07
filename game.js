@@ -70,6 +70,7 @@ class PhysicsObject {
             this.dy = clamp(this.dy, -10, 10);
             this.x += this.dx;
             this.y += this.dy;
+            this.velocity = Math.sqrt(this.dx * this.dx + this.dy * this.dy);
         };
 
         this.clamp_region = function() {
@@ -133,24 +134,14 @@ document.onkeyup = function(e) {
 
 var loop_func = function() {
     canvas_reset();
-    var delta_x = mouse.x - starship.x;
-    var delta_y = mouse.y - starship.y;
-    var inner = delta_x * delta_x + delta_y + delta_y;
-    var magnitude = 0;
-    if (inner > 0) {
-        magnitude = Math.sqrt(inner);
-    }
-
-    starship.velocity = -magnitude * 0.00125;
-    if (starship.velocity > 1) {
-        starship.velocity = 1;
-    } else if (starship.velocity < -1) {
-        starship.velocity = -1;
-    }
-
     var target_angle = Math.atan2(mouse.y - starship.y, mouse.x - starship.x) + Math.PI / 2;
     starship.calculate_state(target_angle, key_pressed.up);
     starship.clamp_region();
+    canvas_context.font = '24px arial'
+    canvas_context.fillText('Velocity: ' + starship.velocity.toFixed(3)
+        + ', x component: ' + starship.dx.toFixed(3)
+        + ', y component: ' + starship.dy.toFixed(3)
+        , 100, 100);
     starship.render(main_canvas);
     setTimeout(loop_func, 16);
 };
