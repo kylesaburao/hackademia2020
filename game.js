@@ -1,24 +1,94 @@
 var main_canvas = document.getElementById('main_canvas');
 var canvas_context = main_canvas.getContext('2d');
 
-main_canvas.width = main_canvas.offsetWidth;
-main_canvas.height = main_canvas.offsetHeight;
+main_canvas.width = window.innerWidth;
+main_canvas.height = window.innerHeight;
+
+window.addEventListener('resize', function (){
+    main_canvas.width = window.innerWidth;
+    main_canvas.height = window.innerHeight;
+    }, 
+    false);
 
 var musk_image = new Image();
 musk_image.src = 'img/elon_musk.png'
 
-var starship_image = new Image();
-starship_image.src = 'img/starship.png'
-starship_image.onload = function () {
-    starship_image.height =  starship_image.height / 4;
-    starship_image.width = starship_image.width / 4;
-};
+function clamp(x, min, max) {
+    if (x < min) {
+        return min;
+    } else if (x > max) {
+        return max;
+    }
+    return x;
+}
 
+class PhysicsObject {
+    constructor(image_src, canvas) {
+        this.canvas = canvas;
 
-var starship_x = main_canvas.width / 2;
-var starship_y = main_canvas.height / 2;
-var starship_dx = 0;
-var starship_dy = 0;
+        this.dx = 0;
+        this.dy = 0;
+        this.x = canvas.width / 2;;
+        this.y = canvas.height / 2;
+        this.width = 0.0;
+        this.height = 0.0;
+        this.angle = 0.0;
+        this.velocity = 0.0;
+        this.angular_velocity = 0.0;
+        this.acceleration = 0.1;
+
+        var image = new Image();
+        this.image = image;
+        this.image.src = image_src;
+        this.image.onload = function () {
+            this.width = image.width / 5;
+            this.height = image.height / 5;
+            // this.height = this.image.height;
+        };
+
+        this.render = function () {
+            var context = canvas.getContext('2d');
+            context.save();
+            context.translate(this.x, this.y);
+            context.rotate(this.angle);
+            context.drawImage(this.image, -this.image.width / 2, -this.image.height / 2, 
+                this.image.width, this.image.height);
+            context.restore();
+        };
+
+        this.calculate_state = function (angle, accelerate) {
+            this.angle = angle;
+            if (accelerate) {
+                this.dx += this.acceleration * Math.sin(this.angle);
+                this.dy -= this.acceleration * Math.cos(this.angle);
+            }
+            if (true) {
+                this.dx += 0.01 * Math.sin(Math.PI);
+                this.dy -= 0.01 * Math.cos(Math.PI);
+            }
+            this.dx = clamp(this.dx, -10, 10);
+            this.dy = clamp(this.dy, -10, 10);
+            this.x += this.dx;
+            this.y += this.dy;
+        };
+
+        this.clamp_region = function() {
+            if (this.x < 0) {
+                this.x = this.canvas.width;
+            }
+            if (this.x > this.canvas.width) {
+                this.x = 0;
+            }
+            if (this.y > this.canvas.height) {
+                this.y = 0;
+            }
+            if (this.y < 0) {
+                this.y = this.canvas.height;
+            }
+        };
+    }
+}
+
 const max_acceleration_component = 5;
 const max_velocity_component = 25;
 
@@ -35,49 +105,6 @@ var mouse_moved = function(e) {
 
 document.addEventListener('mousemove', mouse_moved);
 
-var setup_controls = function(){
-    document.addEventListener('keydown', function(e) {
-        if (e.which == 37) {
-            if (starship_dx > -max_acceleration_component) {
-                starship_dx = starship_dx - 1;
-            }
-        }
-    }); // left
-    document.addEventListener('keydown', function(e) {
-        if (e.which == 40) {
-            if (starship_dy < max_acceleration_component) {
-                starship_dy = starship_dy + 1;
-            }
-        }
-    }); // down
-    document.addEventListener('keydown', function(e) {
-        if (e.which == 38) {
-            if (starship_dy > -max_acceleration_component) {
-                starship_dy = starship_dy - 1;
-            }
-        }
-    }); // up
-    document.addEventListener('keydown', function(e) {
-        if (e.which == 39) {
-            if (starship_dx < max_acceleration_component) {
-                starship_dx = starship_dx + 1;
-            }
-        }
-    }); // right
-};
-
-var starship_flight = function() {
-    starship_x += starship_dx;
-    starship_y += starship_dy;
-};
-
-var starship_render = function(x, y, lookx, looky) {
-    // https://stackoverflow.com/questions/40120470/javascript-making-image-rotate-to-always-look-at-mouse-cursor
-    canvas_context.setTransform(1, 0, 0, 1, x, y);  // set scale and origin
-    canvas_context.rotate(Math.atan2(looky - y, lookx - x) + (Math.PI / 2)); // set angle
-    canvas_context.drawImage(starship_image,-starship_image.width / 2, -starship_image.height / 2, starship_image.width, starship_image.height); // draw image
-    canvas_context.setTransform(1, 0, 0, 1, 0, 0); // restore default not needed if you use setTransform for other rendering operations
-};
 
 var canvas_reset = function() {
     canvas_context.clearRect(0, 0, main_canvas.width, main_canvas.height);
@@ -85,14 +112,46 @@ var canvas_reset = function() {
 
 var render = function() {
     canvas_reset();
-    starship_render(starship_x, starship_y, mouse.x, mouse.y);
 };
 
-setup_controls();
+var starship = new PhysicsObject('img/starship.png', main_canvas);
+
+var key_pressed = {
+    up: false
+};
+
+document.onkeydown = function(e) {
+    if (e.keyCode == 38) {
+        key_pressed.up = true;
+    }
+}
+document.onkeyup = function(e) {
+    if (e.keyCode == 38) {
+        key_pressed.up = false
+    }
+}
 
 var loop_func = function() {
-    starship_flight();
-    render();
+    canvas_reset();
+    var delta_x = mouse.x - starship.x;
+    var delta_y = mouse.y - starship.y;
+    var inner = delta_x * delta_x + delta_y + delta_y;
+    var magnitude = 0;
+    if (inner > 0) {
+        magnitude = Math.sqrt(inner);
+    }
+
+    starship.velocity = -magnitude * 0.00125;
+    if (starship.velocity > 1) {
+        starship.velocity = 1;
+    } else if (starship.velocity < -1) {
+        starship.velocity = -1;
+    }
+
+    var target_angle = Math.atan2(mouse.y - starship.y, mouse.x - starship.x) + Math.PI / 2;
+    starship.calculate_state(target_angle, key_pressed.up);
+    starship.clamp_region();
+    starship.render(main_canvas);
     setTimeout(loop_func, 16);
 };
 
