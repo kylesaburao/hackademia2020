@@ -35,6 +35,7 @@ class PhysicsObject {
         this.angle = 0.0;
         this.velocity = 0.0;
         this.angular_velocity = 0.0;
+        this.acceleration = 0.1;
 
         var image = new Image();
         this.image = image;
@@ -55,21 +56,35 @@ class PhysicsObject {
             context.restore();
         };
 
-        this.calculate_state = function (angle) {
+        this.calculate_state = function (angle, accelerate) {
             this.angle = angle;
-            if (key_pressed.up) { // bug no thrust when pointing up
-                this.dx -= this.velocity * Math.sin(this.angle);
-                this.dy += this.velocity * Math.cos(this.angle);
-
+            if (accelerate) {
+                this.dx += this.acceleration * Math.sin(this.angle);
+                this.dy -= this.acceleration * Math.cos(this.angle);
             }
             if (true) {
-                // this.dx += 0.01 * Math.sin(Math.PI);
-                // this.dy -= 0.01 * Math.cos(Math.PI);
+                this.dx += 0.01 * Math.sin(Math.PI);
+                this.dy -= 0.01 * Math.cos(Math.PI);
             }
             this.dx = clamp(this.dx, -10, 10);
             this.dy = clamp(this.dy, -10, 10);
             this.x += this.dx;
             this.y += this.dy;
+        };
+
+        this.clamp_region = function() {
+            if (this.x < 0) {
+                this.x = this.canvas.width;
+            }
+            if (this.x > this.canvas.width) {
+                this.x = 0;
+            }
+            if (this.y > this.canvas.height) {
+                this.y = 0;
+            }
+            if (this.y < 0) {
+                this.y = this.canvas.height;
+            }
         };
     }
 }
@@ -134,7 +149,8 @@ var loop_func = function() {
     }
 
     var target_angle = Math.atan2(mouse.y - starship.y, mouse.x - starship.x) + Math.PI / 2;
-    starship.calculate_state(target_angle);
+    starship.calculate_state(target_angle, key_pressed.up);
+    starship.clamp_region();
     starship.render(main_canvas);
     setTimeout(loop_func, 16);
 };
