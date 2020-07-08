@@ -34,6 +34,7 @@ class PhysicsObject {
         this.height = 0.0;
         this.angle = 0.0;
         this.core_angular_offset = 0.0;
+        this.previous_velocity = 0.0;
         this.velocity = 0.0;
         this.angular_velocity = 0.0;
 
@@ -76,14 +77,24 @@ class PhysicsObject {
             this.dy -= acceleration * Math.cos(this.angle + this.core_angular_offset + angular_offset);
         };
 
-        this.calculate_state = function (accelerate) {
+        this.calculate_state = function (accelerate, decay_movement) {
             this.angular_velocity = clamp(this.angular_velocity, -this.MAX_ANGULAR_MAGNITUDE, this.MAX_ANGULAR_MAGNITUDE);
             this.angle += this.angular_velocity;
             this.dx = clamp(this.dx, -10, 10);
             this.dy = clamp(this.dy, -10, 10);
             this.x += this.dx;
             this.y += this.dy;
-            this.velocity = Math.sqrt(this.dx * this.dx + this.dy * this.dy);
+
+            this.previous_velocity = this.velocity;
+
+            if (decay_movement) {
+                this.velocity *= 0.98;
+                this.dx *= 0.98;
+                this.dy *= 0.98;
+                this.angular_velocity *= 0.98;
+            } else {
+                this.velocity = Math.sqrt(this.dx * this.dx + this.dy * this.dy);
+            }
         };
 
         this.clamp_region = function() {
@@ -168,10 +179,11 @@ var render_velocity_indicator = function(canvas, object, max_magnitude) {
 
     ctx.font = '20px arial';
     ctx.fillStyle = 'white';
-    ctx.fillText('v: ' + object.velocity.toFixed(3)
-        + ', dx: ' + object.dx.toFixed(3)
-        + ', dy: ' + object.dy.toFixed(3)
-        + ', \u03C9: ' + object.angular_velocity.toFixed(3)
+    ctx.fillText('v: ' + object.velocity.toFixed(2)
+        + ', dx: ' + object.dx.toFixed(2)
+        + ', dy: ' + object.dy.toFixed(2)
+        + ', a: ' + (Math.abs(object.velocity - object.previous_velocity) / (16 / 1000)).toFixed(2)
+        + ', \u03C9: ' + object.angular_velocity.toFixed(2)
         , X_OFFSET, 100);
 };
 
@@ -186,7 +198,8 @@ var key_pressed = {
     left: false,
     right: false,
     down: false,
-    control: false
+    control: false,
+    space: false
 };
 
 document.onkeydown = function(e) {
@@ -200,6 +213,8 @@ document.onkeydown = function(e) {
         key_pressed.down = true;
     } else if (e.keyCode == 17) {
         key_pressed.control = true;
+    } else if (e.keyCode == 32) {
+        key_pressed.space = true;
     }
 }
 document.onkeyup = function(e) {
@@ -213,6 +228,8 @@ document.onkeyup = function(e) {
         key_pressed.down = false;
     } else if (e.keyCode == 17) {
         key_pressed.control = false;
+    } else if (e.keyCode == 32) {
+        key_pressed.space = false;
     }
 }
 
@@ -250,7 +267,13 @@ var loop_func = function() {
         }
     }
 
-    starship.calculate_state(key_pressed.up);
+    if (key_pressed.space) {
+        canvas_context.font = '12px arial';
+        canvas_context.fillStyle = 'white';
+        canvas_context.fillText('Motion arrest', 50, 135);
+    }
+
+    starship.calculate_state(key_pressed.up, key_pressed.space);
     starship.clamp_region();
 
     render_velocity_indicator(main_canvas, starship, 10);
