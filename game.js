@@ -37,12 +37,14 @@ class PhysicsObject {
         this.velocity = 0.0;
         this.angular_velocity = 0.0;
 
+        this.MAX_ANGULAR_MAGNITUDE = 0.1;
+
         var image = new Image();
         this.image = image;
         this.image.src = image_src;
         this.image.onload = function () {
-            this.width = image.width / 5;
-            this.height = image.height / 5;
+            this.width = image.width / 10;
+            this.height = image.height / 10;
             // this.height = this.image.height;
         };
 
@@ -75,7 +77,7 @@ class PhysicsObject {
         };
 
         this.calculate_state = function (accelerate) {
-            this.angular_velocity = clamp(this.angular_velocity, -0.1, 0.1);
+            this.angular_velocity = clamp(this.angular_velocity, -this.MAX_ANGULAR_MAGNITUDE, this.MAX_ANGULAR_MAGNITUDE);
             this.angle += this.angular_velocity;
             this.dx = clamp(this.dx, -10, 10);
             this.dy = clamp(this.dy, -10, 10);
@@ -120,6 +122,57 @@ document.addEventListener('mousemove', mouse_moved);
 
 var canvas_reset = function() {
     canvas_context.clearRect(0, 0, main_canvas.width, main_canvas.height);
+};
+
+var render_velocity_indicator = function(canvas, object, max_magnitude) {
+    const X_OFFSET = 50;
+    const Y_OFFSET = 150;
+    const SIZE = 150;
+    const X_CENTRE = X_OFFSET + SIZE / 2;
+    const Y_CENTRE = Y_OFFSET + SIZE / 2;
+    const ctx = canvas.getContext('2d');
+
+    // Axis
+    ctx.strokeStyle = 'white';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(X_OFFSET, Y_OFFSET + SIZE / 2)
+    ctx.lineTo(X_OFFSET + SIZE, Y_OFFSET + SIZE / 2);
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.moveTo(X_OFFSET + SIZE / 2, Y_OFFSET);
+    ctx.lineTo(X_OFFSET + SIZE / 2, Y_OFFSET + SIZE);
+    ctx.stroke();
+
+    // Velocity indicator
+    const Y_DELTA = (object.dy / max_magnitude) * SIZE / 2;
+    const X_DELTA = (object.dx / max_magnitude) * SIZE / 2;
+    const X_TIP = X_CENTRE + X_DELTA;
+    const Y_TIP = Y_CENTRE + Y_DELTA;
+    ctx.beginPath();
+    ctx.lineWidth = 6;
+    ctx.strokeStyle = 'blue';
+    ctx.moveTo(X_CENTRE, Y_CENTRE);
+    ctx.lineTo(X_TIP, Y_TIP);
+    ctx.stroke();
+
+    // Rotation indicator
+    ctx.beginPath();
+    ctx.lineWidth = 6;
+    ctx.strokeStyle = 'grey';
+    ctx.moveTo(X_TIP, Y_TIP);
+    const ANGULAR_SCALE = Math.max(6, 20 * (Math.abs(object.angular_velocity) / object.MAX_ANGULAR_MAGNITUDE));
+    ctx.lineTo(X_TIP - ANGULAR_SCALE * Math.cos(object.angle + Math.PI / 2), Y_TIP - ANGULAR_SCALE * Math.sin(object.angle + Math.PI / 2));
+    console.log(object.angle)
+    ctx.stroke();
+
+    ctx.font = '20px arial';
+    ctx.fillStyle = 'white';
+    ctx.fillText('v: ' + object.velocity.toFixed(3)
+        + ', dx: ' + object.dx.toFixed(3)
+        + ', dy: ' + object.dy.toFixed(3)
+        + ', \u03C9: ' + object.angular_velocity.toFixed(3)
+        , X_OFFSET, 100);
 };
 
 var render = function() {
@@ -169,11 +222,11 @@ var loop_func = function() {
     if (!key_pressed.control) {
         canvas_context.font = '12px arial';
         canvas_context.fillStyle = 'white';
-        canvas_context.fillText('Flight mode', 100, 120);
+        canvas_context.fillText('Flight mode', 50, 120);
         if (key_pressed.left) {
-            starship.angular_velocity -= 0.0005;
+            starship.angular_velocity -= 0.002;
         } else if (key_pressed.right) {
-            starship.angular_velocity += 0.0005;
+            starship.angular_velocity += 0.002;
         }
 
         if (key_pressed.up) {
@@ -182,29 +235,25 @@ var loop_func = function() {
     } else {
         canvas_context.font = '12px arial';
         canvas_context.fillStyle = 'white';
-        canvas_context.fillText('Translation mode', 100, 120);
+        canvas_context.fillText('Translation mode', 50, 120);
         if (key_pressed.down) {
-            starship.translate_rear(0.005);
+            starship.translate_rear(0.01);
         }
         if (key_pressed.up) {
-            starship.translate_forward(0.005);
+            starship.translate_forward(0.01);
         }
         if (key_pressed.left) {
-            starship.translate_left(0.005);
+            starship.translate_left(0.01);
         }
         if (key_pressed.right) {
-            starship.translate_right(0.005);
+            starship.translate_right(0.01);
         }
     }
 
     starship.calculate_state(key_pressed.up);
     starship.clamp_region();
-    canvas_context.font = '20px arial';
-    canvas_context.fillStyle = 'white';
-    canvas_context.fillText('Velocity: ' + starship.velocity.toFixed(3)
-        + ', x component: ' + starship.dx.toFixed(3)
-        + ', y component: ' + starship.dy.toFixed(3)
-        , 100, 100);
+
+    render_velocity_indicator(main_canvas, starship, 10);
     starship.render(main_canvas);
     setTimeout(loop_func, 16);
 };
