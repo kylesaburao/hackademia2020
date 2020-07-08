@@ -22,9 +22,26 @@ function clamp(x, min, max) {
     return x;
 }
 
+// https://stackoverflow.com/questions/37854355/wait-for-image-loading-to-complete-in-javascript
+async function load_image(url, scale_factor) {
+    let img;
+    const load_promise = new Promise(resolve => {
+        img = new Image();
+        img.onload =  resolve;
+        img.src = url;
+
+    });
+
+    await load_promise;
+    img.width *= scale_factor;
+    img.height *= scale_factor;
+    return img;
+}
+
 class PhysicsObject {
-    constructor(image_src, canvas) {
+    constructor(image_src, canvas, image_scale) {
         this.canvas = canvas;
+        this.ready = false;
 
         this.dx = 0;
         this.dy = 0;
@@ -34,28 +51,26 @@ class PhysicsObject {
         this.height = 0.0;
         this.angle = 0.0;
         this.core_angular_offset = 0.0;
+        this.previous_velocity = 0.0;
         this.velocity = 0.0;
         this.angular_velocity = 0.0;
-
         this.MAX_ANGULAR_MAGNITUDE = 0.1;
 
-        var image = new Image();
-        this.image = image;
-        this.image.src = image_src;
-        this.image.onload = function () {
-            this.width = image.width / 10;
-            this.height = image.height / 10;
-            // this.height = this.image.height;
-        };
+        load_image(image_src, image_scale).then(image => {
+            this.image = image
+            this.ready = true;
+        });
 
         this.render = function () {
-            var context = canvas.getContext('2d');
-            context.save();
-            context.translate(this.x, this.y);
-            context.rotate(this.angle);
-            context.drawImage(this.image, -this.image.width / 2, -this.image.height / 2, 
-                this.image.width, this.image.height);
-            context.restore();
+            if (this.ready) {
+                var context = canvas.getContext('2d');
+                context.save();
+                context.translate(this.x, this.y);
+                context.rotate(this.angle);
+                context.drawImage(this.image, -this.image.width / 2, -this.image.height / 2, 
+                    this.image.width, this.image.height);
+                context.restore();
+            }
         };
 
         this.translate_forward = function(acceleration) {
@@ -76,29 +91,47 @@ class PhysicsObject {
             this.dy -= acceleration * Math.cos(this.angle + this.core_angular_offset + angular_offset);
         };
 
-        this.calculate_state = function (accelerate) {
+        this.calculate_state = function (accelerate, decay_movement) {
             this.angular_velocity = clamp(this.angular_velocity, -this.MAX_ANGULAR_MAGNITUDE, this.MAX_ANGULAR_MAGNITUDE);
             this.angle += this.angular_velocity;
             this.dx = clamp(this.dx, -10, 10);
             this.dy = clamp(this.dy, -10, 10);
             this.x += this.dx;
             this.y += this.dy;
-            this.velocity = Math.sqrt(this.dx * this.dx + this.dy * this.dy);
+
+            this.previous_velocity = this.velocity;
+
+            if (decay_movement) {
+                this.velocity *= 0.98;
+                this.dx *= 0.98;
+                this.dy *= 0.98;
+                this.angular_velocity *= 0.98;
+            } else {
+                this.velocity = Math.sqrt(this.dx * this.dx + this.dy * this.dy);
+            }
         };
 
-        this.clamp_region = function() {
+        this.clamp_region = function(remove_on_leave) {
+            var left_region = false;
             if (this.x < 0) {
                 this.x = this.canvas.width;
+                left_region = true;
             }
             if (this.x > this.canvas.width) {
                 this.x = 0;
+                left_region = true;
+
             }
             if (this.y > this.canvas.height) {
                 this.y = 0;
+                left_region = true;
             }
             if (this.y < 0) {
                 this.y = this.canvas.height;
+                left_region = true;
             }
+
+            return remove_on_leave && left_region;
         };
     }
 }
@@ -124,10 +157,13 @@ var canvas_reset = function() {
     canvas_context.clearRect(0, 0, main_canvas.width, main_canvas.height);
 };
 
-var render_velocity_indicator = function(canvas, object, max_magnitude) {
-    const X_OFFSET = 50;
-    const Y_OFFSET = 150;
+var render_velocity_indicator = function(canvas, object, max_magnitude, keys) {
+    const INDICATOR_WIDTH = 400;
+    const INDICATOR_HEIGHT = 200;
+
     const SIZE = 150;
+    const X_OFFSET = canvas.width / 2 - INDICATOR_WIDTH / 2;
+    const Y_OFFSET = canvas.height - INDICATOR_WIDTH / 2;
     const X_CENTRE = X_OFFSET + SIZE / 2;
     const Y_CENTRE = Y_OFFSET + SIZE / 2;
     const ctx = canvas.getContext('2d');
@@ -163,30 +199,45 @@ var render_velocity_indicator = function(canvas, object, max_magnitude) {
     ctx.moveTo(X_TIP, Y_TIP);
     const ANGULAR_SCALE = Math.max(6, 20 * (Math.abs(object.angular_velocity) / object.MAX_ANGULAR_MAGNITUDE));
     ctx.lineTo(X_TIP - ANGULAR_SCALE * Math.cos(object.angle + Math.PI / 2), Y_TIP - ANGULAR_SCALE * Math.sin(object.angle + Math.PI / 2));
-    console.log(object.angle)
     ctx.stroke();
 
-    ctx.font = '20px arial';
+    ctx.font = '15px arial';
     ctx.fillStyle = 'white';
-    ctx.fillText('v: ' + object.velocity.toFixed(3)
-        + ', dx: ' + object.dx.toFixed(3)
-        + ', dy: ' + object.dy.toFixed(3)
-        + ', \u03C9: ' + object.angular_velocity.toFixed(3)
-        , X_OFFSET, 100);
+    ctx.fillText('v: ' + object.velocity.toFixed(2)
+        + ', d\nx: ' + object.dx.toFixed(2)
+        + ', dy: ' + object.dy.toFixed(2)
+        + ', a: ' + (Math.abs(object.velocity - object.previous_velocity) / (16 / 1000)).toFixed(2)
+        + ', \u03C9: ' + object.angular_velocity.toFixed(2)
+        , X_OFFSET, Y_OFFSET - 30);
+    
+    var control_text = ''
+    if (keys.control) {
+        control_text += 'TRANSLATION MODE  '
+    } else {
+        control_text += 'FLIGHT MODE  '
+    }
+
+    if (keys.space) {
+        control_text += 'MOTION ARREST'
+    }
+    ctx.fillText(control_text, X_OFFSET, Y_OFFSET - 10);
+
 };
 
 var render = function() {
     canvas_reset();
 };
 
-var starship = new PhysicsObject('img/starship.png', main_canvas);
+var starship = new PhysicsObject('img/starship.png', main_canvas, 0.1);
 
 var key_pressed = {
     up: false,
     left: false,
     right: false,
     down: false,
-    control: false
+    control: false,
+    space: false,
+    f: false
 };
 
 document.onkeydown = function(e) {
@@ -200,6 +251,10 @@ document.onkeydown = function(e) {
         key_pressed.down = true;
     } else if (e.keyCode == 17) {
         key_pressed.control = true;
+    } else if (e.keyCode == 32) {
+        key_pressed.space = true;
+    } else if (e.keyCode == 70) {
+        key_pressed.f = true;
     }
 }
 document.onkeyup = function(e) {
@@ -213,16 +268,20 @@ document.onkeyup = function(e) {
         key_pressed.down = false;
     } else if (e.keyCode == 17) {
         key_pressed.control = false;
+    } else if (e.keyCode == 32) {
+        key_pressed.space = false;
+    } else if (e.keyCode == 70) {
+        key_pressed.f = false;
     }
 }
+
+var cars = [];
+var last_car_launched = 0;
 
 var loop_func = function() {
     canvas_reset();
 
     if (!key_pressed.control) {
-        canvas_context.font = '12px arial';
-        canvas_context.fillStyle = 'white';
-        canvas_context.fillText('Flight mode', 50, 120);
         if (key_pressed.left) {
             starship.angular_velocity -= 0.002;
         } else if (key_pressed.right) {
@@ -233,9 +292,6 @@ var loop_func = function() {
             starship.accelerate(0.1);
         }
     } else {
-        canvas_context.font = '12px arial';
-        canvas_context.fillStyle = 'white';
-        canvas_context.fillText('Translation mode', 50, 120);
         if (key_pressed.down) {
             starship.translate_rear(0.01);
         }
@@ -250,10 +306,40 @@ var loop_func = function() {
         }
     }
 
-    starship.calculate_state(key_pressed.up);
+    starship.calculate_state(key_pressed.up, key_pressed.space);
     starship.clamp_region();
 
-    render_velocity_indicator(main_canvas, starship, 10);
+    render_velocity_indicator(main_canvas, starship, 10, key_pressed);
+
+    if (key_pressed.f) {
+        var current_time = new Date().getTime();
+        if (current_time - last_car_launched >= 100) {
+            last_car_launched = current_time;
+            var new_car = new PhysicsObject('img/tesla.png', main_canvas, 0.05);
+            new_car.angle = starship.angle;
+            new_car.dx = starship.dx + 50 * Math.sin(new_car.angle);
+            new_car.dy = starship.dy - 50 * Math.cos(new_car.angle) ;
+            new_car.x = starship.x + 50 * Math.sin(new_car.angle);
+            new_car.y = starship.y - 50 * Math.cos(new_car.angle);
+            cars.push(new_car);
+        }
+    }
+
+    var car_deletion_queue = [];
+    cars.forEach(function(v, i, a) {
+        v.calculate_state(0, false);
+        if (v.clamp_region(true)) {
+            car_deletion_queue.push(i);
+        }
+    });
+    car_deletion_queue.forEach(function(v, i, a) {
+        cars.splice(v, 1);
+        console.log('deleting ' + v);
+    });
+    cars.forEach(function(v, i, a) {
+        v.render(main_canvas);
+    });
+
     starship.render(main_canvas);
     setTimeout(loop_func, 16);
 };
