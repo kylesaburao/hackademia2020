@@ -135,10 +135,13 @@ var canvas_reset = function() {
     canvas_context.clearRect(0, 0, main_canvas.width, main_canvas.height);
 };
 
-var render_velocity_indicator = function(canvas, object, max_magnitude) {
-    const X_OFFSET = 50;
-    const Y_OFFSET = 150;
+var render_velocity_indicator = function(canvas, object, max_magnitude, keys) {
+    const INDICATOR_WIDTH = 400;
+    const INDICATOR_HEIGHT = 200;
+
     const SIZE = 150;
+    const X_OFFSET = canvas.width / 2 - INDICATOR_WIDTH / 2;
+    const Y_OFFSET = canvas.height - INDICATOR_WIDTH / 2;
     const X_CENTRE = X_OFFSET + SIZE / 2;
     const Y_CENTRE = Y_OFFSET + SIZE / 2;
     const ctx = canvas.getContext('2d');
@@ -174,17 +177,29 @@ var render_velocity_indicator = function(canvas, object, max_magnitude) {
     ctx.moveTo(X_TIP, Y_TIP);
     const ANGULAR_SCALE = Math.max(6, 20 * (Math.abs(object.angular_velocity) / object.MAX_ANGULAR_MAGNITUDE));
     ctx.lineTo(X_TIP - ANGULAR_SCALE * Math.cos(object.angle + Math.PI / 2), Y_TIP - ANGULAR_SCALE * Math.sin(object.angle + Math.PI / 2));
-    console.log(object.angle)
     ctx.stroke();
 
-    ctx.font = '20px arial';
+    ctx.font = '15px arial';
     ctx.fillStyle = 'white';
     ctx.fillText('v: ' + object.velocity.toFixed(2)
-        + ', dx: ' + object.dx.toFixed(2)
+        + ', d\nx: ' + object.dx.toFixed(2)
         + ', dy: ' + object.dy.toFixed(2)
         + ', a: ' + (Math.abs(object.velocity - object.previous_velocity) / (16 / 1000)).toFixed(2)
         + ', \u03C9: ' + object.angular_velocity.toFixed(2)
-        , X_OFFSET, 100);
+        , X_OFFSET, Y_OFFSET - 30);
+    
+    var control_text = ''
+    if (keys.control) {
+        control_text += 'TRANSLATION MODE  '
+    } else {
+        control_text += 'FLIGHT MODE  '
+    }
+
+    if (keys.space) {
+        control_text += 'MOTION ARREST'
+    }
+    ctx.fillText(control_text, X_OFFSET, Y_OFFSET - 10);
+
 };
 
 var render = function() {
@@ -237,9 +252,6 @@ var loop_func = function() {
     canvas_reset();
 
     if (!key_pressed.control) {
-        canvas_context.font = '12px arial';
-        canvas_context.fillStyle = 'white';
-        canvas_context.fillText('Flight mode', 50, 120);
         if (key_pressed.left) {
             starship.angular_velocity -= 0.002;
         } else if (key_pressed.right) {
@@ -250,9 +262,6 @@ var loop_func = function() {
             starship.accelerate(0.1);
         }
     } else {
-        canvas_context.font = '12px arial';
-        canvas_context.fillStyle = 'white';
-        canvas_context.fillText('Translation mode', 50, 120);
         if (key_pressed.down) {
             starship.translate_rear(0.01);
         }
@@ -267,16 +276,10 @@ var loop_func = function() {
         }
     }
 
-    if (key_pressed.space) {
-        canvas_context.font = '12px arial';
-        canvas_context.fillStyle = 'white';
-        canvas_context.fillText('Motion arrest', 50, 135);
-    }
-
     starship.calculate_state(key_pressed.up, key_pressed.space);
     starship.clamp_region();
 
-    render_velocity_indicator(main_canvas, starship, 10);
+    render_velocity_indicator(main_canvas, starship, 10, key_pressed);
     starship.render(main_canvas);
     setTimeout(loop_func, 16);
 };
