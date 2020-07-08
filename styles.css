@@ -1,7 +1,11 @@
 #main_canvas {
     width: 100%;
     height: 100%;
-    border:1px solid black;
     background-image: url('img/background.jpg');
     background-position: center;
+    margin: 0px;
+}
+
+body {
+    margin: 0px;
 }
