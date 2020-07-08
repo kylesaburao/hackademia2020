@@ -22,9 +22,26 @@ function clamp(x, min, max) {
     return x;
 }
 
+// https://stackoverflow.com/questions/37854355/wait-for-image-loading-to-complete-in-javascript
+async function load_image(url, scale_factor) {
+    let img;
+    const load_promise = new Promise(resolve => {
+        img = new Image();
+        img.onload =  resolve;
+        img.src = url;
+
+    });
+
+    await load_promise;
+    img.width *= scale_factor;
+    img.height *= scale_factor;
+    return img;
+}
+
 class PhysicsObject {
-    constructor(image_src, canvas) {
+    constructor(image_src, canvas, image_scale) {
         this.canvas = canvas;
+        this.ready = false;
 
         this.dx = 0;
         this.dy = 0;
@@ -37,26 +54,23 @@ class PhysicsObject {
         this.previous_velocity = 0.0;
         this.velocity = 0.0;
         this.angular_velocity = 0.0;
-
         this.MAX_ANGULAR_MAGNITUDE = 0.1;
 
-        var image = new Image();
-        this.image = image;
-        this.image.src = image_src;
-        this.image.onload = function () {
-            this.width = image.width / 10;
-            this.height = image.height / 10;
-            // this.height = this.image.height;
-        };
+        load_image(image_src, image_scale).then(image => {
+            this.image = image
+            this.ready = true;
+        });
 
         this.render = function () {
-            var context = canvas.getContext('2d');
-            context.save();
-            context.translate(this.x, this.y);
-            context.rotate(this.angle);
-            context.drawImage(this.image, -this.image.width / 2, -this.image.height / 2, 
-                this.image.width, this.image.height);
-            context.restore();
+            if (this.ready) {
+                var context = canvas.getContext('2d');
+                context.save();
+                context.translate(this.x, this.y);
+                context.rotate(this.angle);
+                context.drawImage(this.image, -this.image.width / 2, -this.image.height / 2, 
+                    this.image.width, this.image.height);
+                context.restore();
+            }
         };
 
         this.translate_forward = function(acceleration) {
@@ -97,19 +111,27 @@ class PhysicsObject {
             }
         };
 
-        this.clamp_region = function() {
+        this.clamp_region = function(remove_on_leave) {
+            var left_region = false;
             if (this.x < 0) {
                 this.x = this.canvas.width;
+                left_region = true;
             }
             if (this.x > this.canvas.width) {
                 this.x = 0;
+                left_region = true;
+
             }
             if (this.y > this.canvas.height) {
                 this.y = 0;
+                left_region = true;
             }
             if (this.y < 0) {
                 this.y = this.canvas.height;
+                left_region = true;
             }
+
+            return remove_on_leave && left_region;
         };
     }
 }
@@ -206,7 +228,7 @@ var render = function() {
     canvas_reset();
 };
 
-var starship = new PhysicsObject('img/starship.png', main_canvas);
+var starship = new PhysicsObject('img/starship.png', main_canvas, 0.1);
 
 var key_pressed = {
     up: false,
@@ -214,7 +236,8 @@ var key_pressed = {
     right: false,
     down: false,
     control: false,
-    space: false
+    space: false,
+    f: false
 };
 
 document.onkeydown = function(e) {
@@ -230,6 +253,8 @@ document.onkeydown = function(e) {
         key_pressed.control = true;
     } else if (e.keyCode == 32) {
         key_pressed.space = true;
+    } else if (e.keyCode == 70) {
+        key_pressed.f = true;
     }
 }
 document.onkeyup = function(e) {
@@ -245,8 +270,13 @@ document.onkeyup = function(e) {
         key_pressed.control = false;
     } else if (e.keyCode == 32) {
         key_pressed.space = false;
+    } else if (e.keyCode == 70) {
+        key_pressed.f = false;
     }
 }
+
+var cars = [];
+var last_car_launched = 0;
 
 var loop_func = function() {
     canvas_reset();
@@ -280,6 +310,36 @@ var loop_func = function() {
     starship.clamp_region();
 
     render_velocity_indicator(main_canvas, starship, 10, key_pressed);
+
+    if (key_pressed.f) {
+        var current_time = new Date().getTime();
+        if (current_time - last_car_launched >= 100) {
+            last_car_launched = current_time;
+            var new_car = new PhysicsObject('img/tesla.png', main_canvas, 0.05);
+            new_car.angle = starship.angle;
+            new_car.dx = starship.dx + 50 * Math.sin(new_car.angle);
+            new_car.dy = starship.dy - 50 * Math.cos(new_car.angle) ;
+            new_car.x = starship.x + 50 * Math.sin(new_car.angle);
+            new_car.y = starship.y - 50 * Math.cos(new_car.angle);
+            cars.push(new_car);
+        }
+    }
+
+    var car_deletion_queue = [];
+    cars.forEach(function(v, i, a) {
+        v.calculate_state(0, false);
+        if (v.clamp_region(true)) {
+            car_deletion_queue.push(i);
+        }
+    });
+    car_deletion_queue.forEach(function(v, i, a) {
+        cars.splice(v, 1);
+        console.log('deleting ' + v);
+    });
+    cars.forEach(function(v, i, a) {
+        v.render(main_canvas);
+    });
+
     starship.render(main_canvas);
     setTimeout(loop_func, 16);
 };
