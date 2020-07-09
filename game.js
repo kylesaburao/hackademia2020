@@ -39,10 +39,11 @@ async function load_image(url, scale_factor) {
 }
 
 class PhysicsObject {
-    constructor(image_src, canvas, image_scale) {
+    constructor(mass, image_src, canvas, image_scale) {
         this.canvas = canvas;
         this.ready = false;
 
+        this.mass = mass;
         this.dx = 0;
         this.dy = 0;
         this.x = canvas.width / 2;;
@@ -54,7 +55,9 @@ class PhysicsObject {
         this.previous_velocity = 0.0;
         this.velocity = 0.0;
         this.angular_velocity = 0.0;
+
         this.MAX_ANGULAR_MAGNITUDE = 0.1;
+        this.MAX_ACCELERATION_MAGNITUDE = 10;
 
         load_image(image_src, image_scale).then(image => {
             this.image = image
@@ -73,42 +76,34 @@ class PhysicsObject {
             }
         };
 
-        this.translate_forward = function(acceleration) {
-            this.accelerate(acceleration, 0.0);
+        this.translate_forward = function(force) {
+            this.apply_force(force, 0.0);
         };
-        this.translate_rear = function(acceleration) {
-            this.accelerate(acceleration, Math.PI);
+        this.translate_rear = function(force) {
+            this.apply_force(force, Math.PI);
         };
-        this.translate_left = function(acceleration) {
-            this.accelerate(acceleration, -Math.PI/2);
+        this.translate_left = function(force) {
+            this.apply_force(force, -Math.PI/2);
         };
-        this.translate_right = function(acceleration) {
-            this.accelerate(acceleration, Math.PI/2);
+        this.translate_right = function(force) {
+            this.apply_force(force, Math.PI/2);
         };
 
-        this.accelerate = function(acceleration, angular_offset=0.0) {
+        this.apply_force = function(force, angular_offset=0.0) {
+            const acceleration = force / this.mass;
             this.dx += acceleration * Math.sin(this.angle + this.core_angular_offset + angular_offset);
             this.dy -= acceleration * Math.cos(this.angle + this.core_angular_offset + angular_offset);
+            this.dx = clamp(this.dx, -this.MAX_ACCELERATION_MAGNITUDE, this.MAX_ACCELERATION_MAGNITUDE);
+            this.dy = clamp(this.dy, -this.MAX_ACCELERATION_MAGNITUDE, this.MAX_ACCELERATION_MAGNITUDE);
         };
 
-        this.calculate_state = function (accelerate, decay_movement) {
+        this.calculate_state = function() {
             this.angular_velocity = clamp(this.angular_velocity, -this.MAX_ANGULAR_MAGNITUDE, this.MAX_ANGULAR_MAGNITUDE);
             this.angle += this.angular_velocity;
-            this.dx = clamp(this.dx, -10, 10);
-            this.dy = clamp(this.dy, -10, 10);
             this.x += this.dx;
             this.y += this.dy;
-
             this.previous_velocity = this.velocity;
-
-            if (decay_movement) {
-                this.velocity *= 0.98;
-                this.dx *= 0.98;
-                this.dy *= 0.98;
-                this.angular_velocity *= 0.98;
-            } else {
-                this.velocity = Math.sqrt(this.dx * this.dx + this.dy * this.dy);
-            }
+            this.velocity = Math.sqrt(this.dx * this.dx + this.dy * this.dy);
         };
 
         this.clamp_region = function(remove_on_leave) {
@@ -120,7 +115,6 @@ class PhysicsObject {
             if (this.x > this.canvas.width) {
                 this.x = 0;
                 left_region = true;
-
             }
             if (this.y > this.canvas.height) {
                 this.y = 0;
@@ -136,7 +130,6 @@ class PhysicsObject {
     }
 }
 
-const max_acceleration_component = 5;
 const max_velocity_component = 25;
 
 var mouse = {
@@ -204,9 +197,10 @@ var render_velocity_indicator = function(canvas, object, max_magnitude, keys) {
     ctx.font = '15px arial';
     ctx.fillStyle = 'white';
     ctx.fillText('v: ' + object.velocity.toFixed(2)
-        + ', d\nx: ' + object.dx.toFixed(2)
+        + ', dx: ' + object.dx.toFixed(2)
         + ', dy: ' + object.dy.toFixed(2)
         + ', a: ' + (Math.abs(object.velocity - object.previous_velocity) / (16 / 1000)).toFixed(2)
+        + ', \u03b8:' + object.angle.toFixed(2)
         + ', \u03C9: ' + object.angular_velocity.toFixed(2)
         , X_OFFSET, Y_OFFSET - 30);
     
@@ -228,7 +222,7 @@ var render = function() {
     canvas_reset();
 };
 
-var starship = new PhysicsObject('img/starship.png', main_canvas, 0.1);
+var starship = new PhysicsObject(1000, 'img/starship.png', main_canvas, 0.1);
 
 var key_pressed = {
     up: false,
@@ -278,56 +272,100 @@ document.onkeyup = function(e) {
 var cars = [];
 var last_car_launched = 0;
 
+class AutopilotData {
+    constructor(physicsObject) {
+        this.physicsObject = physicsObject;
+        this.target_angle = null;
+
+        this.set_target_angle_offset = function(angular_offset_magnitude) {
+            var target_angle_left = this.physicsObject.angle - angular_offset_magnitude;
+            var target_angle_right = this.physicsObject.angle + angular_offset_magnitude;
+
+            this.target_angle = (Math.abs(target_angle_left - this.physicsObject.angle) 
+                <= Math.abs(target_angle_right - this.physicsObject.angle))
+                ? target_angle_left : target_angle_right;
+            console.log(this.target_angle)
+        }
+
+        this.is_target_angle_set = function() {
+            return this.target_angle != null;
+        }
+
+        this.clear_target_angle = function() {
+            this.target_angle = null;
+        }
+
+        this.move_to_target_angle = function() {
+            const CURRENT_ANGLE = this.physicsObject.angle;
+            const ERROR = CURRENT_ANGLE - this.target_angle;
+            this.physicsObject.angular_velocity += -1 * 0.0025 * (ERROR / Math.PI);
+            if (ERROR <= 0.1995) {
+                this.physicsObject.angular_velocity *= 0.625;
+            }
+        }
+    };
+};
+
+var autopilot = new AutopilotData(starship);
+
 var loop_func = function() {
     canvas_reset();
 
-    if (!key_pressed.control) {
-        if (key_pressed.left) {
-            starship.angular_velocity -= 0.002;
-        } else if (key_pressed.right) {
-            starship.angular_velocity += 0.002;
-        }
+    if (!key_pressed.space) {
 
-        if (key_pressed.up) {
-            starship.accelerate(0.1);
+        if (!key_pressed.control) {
+            if (key_pressed.left) {
+                starship.angular_velocity -= 0.002;
+            } else if (key_pressed.right) {
+                starship.angular_velocity += 0.002;
+            }
+
+            if (key_pressed.up) {
+                starship.apply_force(100);
+            }
+        } else {
+            if (key_pressed.down) {
+                starship.translate_rear(7.5);
+            }
+            if (key_pressed.up) {
+                starship.translate_forward(7.5);
+            }
+            if (key_pressed.left) {
+                starship.translate_left(7.5);
+            }
+            if (key_pressed.right) {
+                starship.translate_right(7.5);
+            }
         }
     } else {
-        if (key_pressed.down) {
-            starship.translate_rear(0.01);
-        }
-        if (key_pressed.up) {
-            starship.translate_forward(0.01);
-        }
-        if (key_pressed.left) {
-            starship.translate_left(0.01);
-        }
-        if (key_pressed.right) {
-            starship.translate_right(0.01);
-        }
+
     }
 
-    starship.calculate_state(key_pressed.up, key_pressed.space);
+    starship.calculate_state();
     starship.clamp_region();
 
     render_velocity_indicator(main_canvas, starship, 10, key_pressed);
 
     if (key_pressed.f) {
+        // todo: implement mass and new acceleration model with f=ma
         var current_time = new Date().getTime();
-        if (current_time - last_car_launched >= 100) {
+        if (current_time - last_car_launched >= 250) {
             last_car_launched = current_time;
-            var new_car = new PhysicsObject('img/tesla.png', main_canvas, 0.05);
+            var new_car = new PhysicsObject(1, 'img/tesla.png', main_canvas, 0.05);
             new_car.angle = starship.angle;
-            new_car.dx = starship.dx + 50 * Math.sin(new_car.angle);
-            new_car.dy = starship.dy - 50 * Math.cos(new_car.angle) ;
+            const LAUNCH_FORCE = 150;
+            new_car.angular_velocity = starship.angular_velocity / 2;
             new_car.x = starship.x + 50 * Math.sin(new_car.angle);
             new_car.y = starship.y - 50 * Math.cos(new_car.angle);
+            new_car.translate_forward(LAUNCH_FORCE);
+            starship.translate_rear(LAUNCH_FORCE);
             cars.push(new_car);
         }
     }
 
     var car_deletion_queue = [];
     cars.forEach(function(v, i, a) {
-        v.calculate_state(0, false);
+        v.calculate_state();
         if (v.clamp_region(true)) {
             car_deletion_queue.push(i);
         }
