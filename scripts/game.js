@@ -11,7 +11,7 @@ window.addEventListener('resize', function (){
     false);
 
 var musk_image = new Image();
-musk_image.src = 'img/elon_musk.png'
+musk_image.src = '../img/elon_musk.png'
 
 function clamp(x, min, max) {
     if (x < min) {
@@ -243,7 +243,7 @@ var render = function() {
     canvas_reset();
 };
 
-var starship = new PhysicsObject(1000, 'img/starship.png', main_canvas, 0.1);
+var starship = new PhysicsObject(1000, '../img/starship.png', main_canvas, 0.1);
 
 var controls = {
     up: false,
@@ -390,7 +390,7 @@ var loop_func = function() {
         var current_time = new Date().getTime();
         if (current_time - last_car_launched >= 250) {
             last_car_launched = current_time;
-            var new_car = new PhysicsObject(1, 'img/tesla.png', main_canvas, 0.05);
+            var new_car = new PhysicsObject(1, '../img/tesla.png', main_canvas, 0.05);
             new_car.MAX_VELOCITY_MAGNITUDE = 20;
             new_car.angle = starship.angle;
             const LAUNCH_FORCE = 500;
