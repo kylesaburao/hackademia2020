@@ -58,6 +58,7 @@ class PhysicsObject {
 
         this.MAX_ANGULAR_MAGNITUDE = 0.1;
         this.MAX_ACCELERATION_MAGNITUDE = 10;
+        this.MAX_VELOCITY_MAGNITUDE = 10;
 
         load_image(image_src, image_scale).then(image => {
             this.image = image
@@ -93,8 +94,8 @@ class PhysicsObject {
             const acceleration = force / this.mass;
             this.dx += acceleration * Math.sin(this.angle + this.core_angular_offset + angular_offset);
             this.dy -= acceleration * Math.cos(this.angle + this.core_angular_offset + angular_offset);
-            this.dx = clamp(this.dx, -this.MAX_ACCELERATION_MAGNITUDE, this.MAX_ACCELERATION_MAGNITUDE);
-            this.dy = clamp(this.dy, -this.MAX_ACCELERATION_MAGNITUDE, this.MAX_ACCELERATION_MAGNITUDE);
+            this.dx = clamp(this.dx, -this.MAX_VELOCITY_MAGNITUDE, this.MAX_VELOCITY_MAGNITUDE);
+            this.dy = clamp(this.dy, -this.MAX_VELOCITY_MAGNITUDE, this.MAX_VELOCITY_MAGNITUDE);
         };
 
         this.calculate_state = function() {
@@ -205,16 +206,34 @@ var render_velocity_indicator = function(canvas, object, max_magnitude, keys) {
         , X_OFFSET, Y_OFFSET - 30);
     
     var control_text = ''
-    if (keys.control) {
-        control_text += 'TRANSLATION MODE  '
-    } else {
-        control_text += 'FLIGHT MODE  '
-    }
-
     if (keys.space) {
-        control_text += 'MOTION ARREST'
+        control_text += 'TRANSLATION MODE'
+    } else {
+        control_text += 'FLIGHT MODE'
+    }
+    if (controls.fuel == 0.0) {
+        control_text += ' | OUT OF FUEL'
     }
     ctx.fillText(control_text, X_OFFSET, Y_OFFSET - 10);
+
+    // throttle
+    ctx.strokeStyle = 'blue';
+    ctx.beginPath();
+    ctx.moveTo(X_OFFSET + SIZE + 25, Y_OFFSET + SIZE);
+    ctx.lineTo(X_OFFSET + SIZE + 25, Y_OFFSET + SIZE - (SIZE * controls.throttle));
+    ctx.stroke();
+
+    // fuel
+    ctx.strokeStyle = 'yellow';
+    ctx.beginPath();
+    ctx.moveTo(X_OFFSET + SIZE + 35, Y_OFFSET + SIZE);
+    ctx.lineTo(X_OFFSET + SIZE + 35, Y_OFFSET + SIZE - (SIZE * (controls.fuel / controls.max_fuel)));
+    ctx.stroke();
+
+    ctx.font = '12px arial'
+    ctx.fillText('Fuel: ' + controls.fuel.toFixed(2), X_OFFSET + SIZE + 45, Y_OFFSET + SIZE - 30)
+    ctx.fillText('Burn Rate: ' + controls.fuel_burn_rate.toFixed(2), X_OFFSET + SIZE + 45, Y_OFFSET + SIZE - 15)
+    ctx.fillText('Throttle: ' + (controls.throttle * 100).toFixed(2) + '%', X_OFFSET + SIZE + 45, Y_OFFSET + SIZE)
 
 };
 
@@ -224,48 +243,57 @@ var render = function() {
 
 var starship = new PhysicsObject(1000, 'img/starship.png', main_canvas, 0.1);
 
-var key_pressed = {
+var controls = {
     up: false,
     left: false,
     right: false,
     down: false,
+    shift: false,
     control: false,
     space: false,
-    f: false
+    f: false,
+    throttle: 1,
+    fuel: 100,
+    max_fuel: 100,
+    fuel_burn_rate: 1
 };
 
 document.onkeydown = function(e) {
     if (e.keyCode == 38) {
-        key_pressed.up = true;
+        controls.up = true;
     } else if (e.keyCode == 37) {
-        key_pressed.left = true;
+        controls.left = true;
     } else if (e.keyCode == 39) {
-        key_pressed.right = true;
+        controls.right = true;
     } else if (e.keyCode == 40) {
-        key_pressed.down = true;
+        controls.down = true;
     } else if (e.keyCode == 17) {
-        key_pressed.control = true;
+        controls.control = true;
     } else if (e.keyCode == 32) {
-        key_pressed.space = true;
+        controls.space = true;
     } else if (e.keyCode == 70) {
-        key_pressed.f = true;
+        controls.f = true;
+    } else if (e.keyCode == 16) {
+        controls.shift = true;
     }
 }
 document.onkeyup = function(e) {
     if (e.keyCode == 38) {
-        key_pressed.up = false
+        controls.up = false
     } else if (e.keyCode == 37) {
-        key_pressed.left = false;
+        controls.left = false;
     } else if (e.keyCode == 39) {
-        key_pressed.right = false;
+        controls.right = false;
     } else if (e.keyCode == 40) {
-        key_pressed.down = false;
+        controls.down = false;
     } else if (e.keyCode == 17) {
-        key_pressed.control = false;
+        controls.control = false;
     } else if (e.keyCode == 32) {
-        key_pressed.space = false;
+        controls.space = false;
     } else if (e.keyCode == 70) {
-        key_pressed.f = false;
+        controls.f = false;
+    } else if (e.keyCode == 16) {
+        controls.shift = false;
     }
 }
 
@@ -284,7 +312,6 @@ class AutopilotData {
             this.target_angle = (Math.abs(target_angle_left - this.physicsObject.angle) 
                 <= Math.abs(target_angle_right - this.physicsObject.angle))
                 ? target_angle_left : target_angle_right;
-            console.log(this.target_angle)
         }
 
         this.is_target_angle_set = function() {
@@ -311,49 +338,59 @@ var autopilot = new AutopilotData(starship);
 var loop_func = function() {
     canvas_reset();
 
-    if (!key_pressed.space) {
+    if (controls.shift) {
+        controls.throttle += 0.02;
+    } else if (controls.control) {
+        controls.throttle -= 0.02;
+    }
 
-        if (!key_pressed.control) {
-            if (key_pressed.left) {
-                starship.angular_velocity -= 0.002;
-            } else if (key_pressed.right) {
-                starship.angular_velocity += 0.002;
-            }
+    controls.fuel_burn_rate = 0.1 * controls.throttle;
+    controls.throttle = clamp(controls.throttle, 0.40, 1.0);
 
-            if (key_pressed.up) {
-                starship.apply_force(100);
-            }
+    if (!controls.space) {
+        if (controls.left) {
+            starship.angular_velocity -= 0.002;
+        } else if (controls.right) {
+            starship.angular_velocity += 0.002;
+        }
+
+        const MAIN_THRUST = 100;
+        if (controls.up && controls.fuel > 0) {
+            starship.apply_force(controls.throttle * MAIN_THRUST);
+            controls.fuel -= controls.fuel_burn_rate;
+            controls.fuel = clamp(controls.fuel, 0.0, controls.max_fuel);
         } else {
-            if (key_pressed.down) {
-                starship.translate_rear(7.5);
-            }
-            if (key_pressed.up) {
-                starship.translate_forward(7.5);
-            }
-            if (key_pressed.left) {
-                starship.translate_left(7.5);
-            }
-            if (key_pressed.right) {
-                starship.translate_right(7.5);
-            }
+            controls.fuel_burn_rate = 0.0;
         }
     } else {
-
+        if (controls.down) {
+            starship.translate_rear(7.5);
+        }
+        if (controls.up) {
+            starship.translate_forward(7.5);
+        }
+        if (controls.left) {
+            starship.translate_left(7.5);
+        }
+        if (controls.right) {
+            starship.translate_right(7.5);
+        }
     }
 
     starship.calculate_state();
     starship.clamp_region();
 
-    render_velocity_indicator(main_canvas, starship, 10, key_pressed);
+    render_velocity_indicator(main_canvas, starship, 10, controls);
 
-    if (key_pressed.f) {
+    if (controls.f) {
         // todo: implement mass and new acceleration model with f=ma
         var current_time = new Date().getTime();
         if (current_time - last_car_launched >= 250) {
             last_car_launched = current_time;
             var new_car = new PhysicsObject(1, 'img/tesla.png', main_canvas, 0.05);
+            new_car.MAX_VELOCITY_MAGNITUDE = 20;
             new_car.angle = starship.angle;
-            const LAUNCH_FORCE = 150;
+            const LAUNCH_FORCE = 500;
             new_car.angular_velocity = starship.angular_velocity / 2;
             new_car.x = starship.x + 50 * Math.sin(new_car.angle);
             new_car.y = starship.y - 50 * Math.cos(new_car.angle);
