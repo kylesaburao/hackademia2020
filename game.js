@@ -359,6 +359,8 @@ var loop_func = function() {
             starship.apply_force(controls.throttle * MAIN_THRUST);
             controls.fuel -= controls.fuel_burn_rate;
             controls.fuel = clamp(controls.fuel, 0.0, controls.max_fuel);
+        } else {
+            controls.fuel_burn_rate = 0.0;
         }
     } else {
         if (controls.down) {
