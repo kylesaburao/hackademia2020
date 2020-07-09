@@ -10,9 +10,6 @@ window.addEventListener('resize', function (){
     }, 
     false);
 
-var musk_image = new Image();
-musk_image.src = '../img/elon_musk.png'
-
 function clamp(x, min, max) {
     if (x < min) {
         return min;
@@ -111,19 +108,27 @@ class PhysicsObject {
         this.clamp_region = function(remove_on_leave) {
             var left_region = false;
             if (this.x < 0) {
-                this.x = this.canvas.width;
+                if (!remove_on_leave) {
+                    this.x = this.canvas.width;
+                }
                 left_region = true;
             }
             if (this.x > this.canvas.width) {
-                this.x = 0;
+                if (!remove_on_leave) {
+                    this.x = 0;
+                }
                 left_region = true;
             }
             if (this.y > this.canvas.height) {
-                this.y = 0;
+                if (!remove_on_leave) {
+                    this.y = 0;
+                }
                 left_region = true;
             }
             if (this.y < 0) {
-                this.y = this.canvas.height;
+                if (!remove_on_leave) {
+                    this.y = this.canvas.height;
+                }
                 left_region = true;
             }
 
@@ -146,7 +151,6 @@ var mouse_moved = function(e) {
 };
 
 document.addEventListener('mousemove', mouse_moved);
-
 
 var canvas_reset = function() {
     canvas_context.clearRect(0, 0, main_canvas.width, main_canvas.height);
@@ -302,6 +306,44 @@ document.onkeyup = function(e) {
 var cars = [];
 var last_car_launched = 0;
 
+var asteroids = {
+    entities: [],
+    image_srcs: ['../img/target/asteroid_1.png', '../img/target/asteroid_2.png', '../img/target/asteroid_3.png'
+        , '../img/target/asteroid_4.png', '../img/target/bezos_1.png', '../img/target/mars_1.png'
+    ],
+    max_count: 20,
+    last_launched: 0,
+    min_launch_interval: 1000,
+    min_launch_interval_range: 500
+};
+
+function spawn_asteroid(canvas) {
+    const random_sign = function() {
+        return ((Math.random() < 0.5) ? 1 : -1)
+    };
+
+    const max_velocity_component = 5
+    const random_x = canvas.width * Math.random()
+    const random_y = canvas.height * Math.random()
+    const random_dx =  random_sign() * (Math.random() * max_velocity_component)
+    const random_dy = random_sign() * (Math.random() * max_velocity_component)
+    const random_rotational_velocity = random_sign() * (Math.random() * 0.01)
+    const random_rotation = random_sign() * Math.random() * 2 * Math.PI
+    const random_mass = clamp(Math.random() * 5000, 100, 5000)
+    const random_img_src = asteroids.image_srcs[Math.floor(Math.random() * asteroids.image_srcs.length)]
+
+    var asteroid = new PhysicsObject(random_mass, random_img_src, canvas, 0.20)
+    asteroid.x = random_x
+    asteroid.y = random_y
+    asteroid.dx = random_dx
+    asteroid.dy = random_dy
+    asteroid.angular_velocity = random_rotational_velocity
+    asteroid.angle = random_rotation
+
+    asteroids.entities.push(asteroid)
+}
+
+
 class AutopilotData {
     constructor(physicsObject) {
         this.physicsObject = physicsObject;
@@ -383,20 +425,19 @@ var loop_func = function() {
     starship.calculate_state();
     starship.clamp_region();
 
-    render_velocity_indicator(main_canvas, starship, 10, controls);
-
     if (controls.f) {
-        // todo: implement mass and new acceleration model with f=ma
         var current_time = new Date().getTime();
         if (current_time - last_car_launched >= 250) {
             last_car_launched = current_time;
             var new_car = new PhysicsObject(1, '../img/tesla.png', main_canvas, 0.05);
-            new_car.MAX_VELOCITY_MAGNITUDE = 20;
+            new_car.MAX_VELOCITY_MAGNITUDE = 50;
             new_car.angle = starship.angle;
-            const LAUNCH_FORCE = 500;
+            const LAUNCH_FORCE = 10;
             new_car.angular_velocity = starship.angular_velocity / 2;
             new_car.x = starship.x + 50 * Math.sin(new_car.angle);
             new_car.y = starship.y - 50 * Math.cos(new_car.angle);
+            new_car.dx = starship.dx;
+            new_car.dy = starship.dy;
             new_car.translate_forward(LAUNCH_FORCE);
             starship.translate_rear(LAUNCH_FORCE);
             cars.push(new_car);
@@ -412,13 +453,37 @@ var loop_func = function() {
     });
     car_deletion_queue.forEach(function(v, i, a) {
         cars.splice(v, 1);
-        console.log('deleting ' + v);
     });
     cars.forEach(function(v, i, a) {
         v.render(main_canvas);
     });
 
     starship.render(main_canvas);
+
+    if (new Date().getTime() - asteroids.last_launched 
+        >= asteroids.min_launch_interval + Math.random() * asteroids.min_launch_interval_range) {
+        if (asteroids.entities.length < asteroids.max_count) {
+            spawn_asteroid(main_canvas)
+        }
+        asteroids.last_launched = new Date().getTime()
+    }
+
+    asteroid_index_deletion_queue = []
+    asteroids.entities.forEach(function(asteroid, index, array) {
+        asteroid.calculate_state()
+        if (asteroid.clamp_region(true)) {
+            asteroid_index_deletion_queue.push(index)
+        }
+        asteroid.render()
+    })
+    asteroid_index_deletion_queue.forEach(function(v, i, a) {
+        asteroids.entities.splice(v, 1)
+    })
+    asteroids.entities.forEach(function(asteroid, index, array) {
+        asteroid.render()
+    })
+
+    render_velocity_indicator(main_canvas, starship, 10, controls);
     setTimeout(loop_func, 16);
 };
 
