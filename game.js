@@ -44,6 +44,7 @@ class PhysicsObject {
         this.ready = false;
 
         this.mass = mass;
+        this.extra_mass = 0.0;
         this.dx = 0;
         this.dy = 0;
         this.x = canvas.width / 2;;
@@ -91,7 +92,7 @@ class PhysicsObject {
         };
 
         this.apply_force = function(force, angular_offset=0.0) {
-            const acceleration = force / this.mass;
+            const acceleration = force / (this.mass + this.extra_mass);
             this.dx += acceleration * Math.sin(this.angle + this.core_angular_offset + angular_offset);
             this.dy -= acceleration * Math.cos(this.angle + this.core_angular_offset + angular_offset);
             this.dx = clamp(this.dx, -this.MAX_VELOCITY_MAGNITUDE, this.MAX_VELOCITY_MAGNITUDE);
@@ -231,8 +232,9 @@ var render_velocity_indicator = function(canvas, object, max_magnitude, keys) {
     ctx.stroke();
 
     ctx.font = '12px arial'
+    ctx.fillText('Mass: ' + (starship.mass + starship.extra_mass).toFixed(2), X_OFFSET + SIZE + 45, Y_OFFSET + SIZE - 45)
     ctx.fillText('Fuel: ' + controls.fuel.toFixed(2), X_OFFSET + SIZE + 45, Y_OFFSET + SIZE - 30)
-    ctx.fillText('Burn Rate: ' + controls.fuel_burn_rate.toFixed(2), X_OFFSET + SIZE + 45, Y_OFFSET + SIZE - 15)
+    ctx.fillText('Burn Rate: ' + (controls.fuel_burn_rate * (1000 / 16)).toFixed(2) + '/s', X_OFFSET + SIZE + 45, Y_OFFSET + SIZE - 15)
     ctx.fillText('Throttle: ' + (controls.throttle * 100).toFixed(2) + '%', X_OFFSET + SIZE + 45, Y_OFFSET + SIZE)
 
 };
@@ -377,6 +379,7 @@ var loop_func = function() {
         }
     }
 
+    starship.extra_mass = controls.fuel * 10;
     starship.calculate_state();
     starship.clamp_region();
 
