@@ -203,7 +203,7 @@ var render_velocity_indicator = function(canvas, object, max_magnitude, keys) {
         + ', dy: ' + object.dy.toFixed(2)
         + ', a: ' + (Math.abs(object.velocity - object.previous_velocity) / (16 / 1000)).toFixed(2)
         + ', \u03b8:' + object.angle.toFixed(2)
-        + ', \u03C9: ' + object.angular_velocity.toFixed(2)
+        + ', \u03C9: ' + (object.angular_velocity * (1000 / 16)).toFixed(2)
         , X_OFFSET, Y_OFFSET - 30);
     
     var control_text = ''
