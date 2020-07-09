@@ -232,7 +232,7 @@ var render_velocity_indicator = function(canvas, object, max_magnitude, keys) {
 
     ctx.font = '12px arial'
     ctx.fillText('Fuel: ' + controls.fuel.toFixed(2), X_OFFSET + SIZE + 45, Y_OFFSET + SIZE - 30)
-    ctx.fillText('Burn Rate: ' + (0.1 * controls.throttle).toFixed(2), X_OFFSET + SIZE + 45, Y_OFFSET + SIZE - 15)
+    ctx.fillText('Burn Rate: ' + controls.fuel_burn_rate.toFixed(2), X_OFFSET + SIZE + 45, Y_OFFSET + SIZE - 15)
     ctx.fillText('Throttle: ' + (controls.throttle * 100).toFixed(2) + '%', X_OFFSET + SIZE + 45, Y_OFFSET + SIZE)
 
 };
@@ -254,7 +254,8 @@ var controls = {
     f: false,
     throttle: 1,
     fuel: 100,
-    max_fuel: 100
+    max_fuel: 100,
+    fuel_burn_rate: 1
 };
 
 document.onkeydown = function(e) {
@@ -343,6 +344,7 @@ var loop_func = function() {
         controls.throttle -= 0.02;
     }
 
+    controls.fuel_burn_rate = 0.1 * controls.throttle;
     controls.throttle = clamp(controls.throttle, 0.40, 1.0);
 
     if (!controls.space) {
@@ -355,7 +357,7 @@ var loop_func = function() {
         const MAIN_THRUST = 100;
         if (controls.up && controls.fuel > 0) {
             starship.apply_force(controls.throttle * MAIN_THRUST);
-            controls.fuel -= 0.1 * controls.throttle;
+            controls.fuel -= controls.fuel_burn_rate;
             controls.fuel = clamp(controls.fuel, 0.0, controls.max_fuel);
         }
     } else {
