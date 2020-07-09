@@ -232,7 +232,7 @@ var render_velocity_indicator = function(canvas, object, max_magnitude, keys) {
 
     ctx.font = '12px arial'
     ctx.fillText('Fuel: ' + controls.fuel.toFixed(2), X_OFFSET + SIZE + 45, Y_OFFSET + SIZE - 30)
-    ctx.fillText('Burn Rate: ' + controls.fuel_burn_rate.toFixed(2), X_OFFSET + SIZE + 45, Y_OFFSET + SIZE - 15)
+    ctx.fillText('Burn Rate: ' + (controls.fuel_burn_rate * (1000 / 16)).toFixed(2) + '/s', X_OFFSET + SIZE + 45, Y_OFFSET + SIZE - 15)
     ctx.fillText('Throttle: ' + (controls.throttle * 100).toFixed(2) + '%', X_OFFSET + SIZE + 45, Y_OFFSET + SIZE)
 
 };
