@@ -58,6 +58,7 @@ class PhysicsObject {
 
         this.MAX_ANGULAR_MAGNITUDE = 0.1;
         this.MAX_ACCELERATION_MAGNITUDE = 10;
+        this.MAX_VELOCITY_MAGNITUDE = 10;
 
         load_image(image_src, image_scale).then(image => {
             this.image = image
@@ -93,8 +94,8 @@ class PhysicsObject {
             const acceleration = force / this.mass;
             this.dx += acceleration * Math.sin(this.angle + this.core_angular_offset + angular_offset);
             this.dy -= acceleration * Math.cos(this.angle + this.core_angular_offset + angular_offset);
-            this.dx = clamp(this.dx, -this.MAX_ACCELERATION_MAGNITUDE, this.MAX_ACCELERATION_MAGNITUDE);
-            this.dy = clamp(this.dy, -this.MAX_ACCELERATION_MAGNITUDE, this.MAX_ACCELERATION_MAGNITUDE);
+            this.dx = clamp(this.dx, -this.MAX_VELOCITY_MAGNITUDE, this.MAX_VELOCITY_MAGNITUDE);
+            this.dy = clamp(this.dy, -this.MAX_VELOCITY_MAGNITUDE, this.MAX_VELOCITY_MAGNITUDE);
         };
 
         this.calculate_state = function() {
@@ -284,7 +285,6 @@ class AutopilotData {
             this.target_angle = (Math.abs(target_angle_left - this.physicsObject.angle) 
                 <= Math.abs(target_angle_right - this.physicsObject.angle))
                 ? target_angle_left : target_angle_right;
-            console.log(this.target_angle)
         }
 
         this.is_target_angle_set = function() {
@@ -312,7 +312,6 @@ var loop_func = function() {
     canvas_reset();
 
     if (!key_pressed.space) {
-
         if (!key_pressed.control) {
             if (key_pressed.left) {
                 starship.angular_velocity -= 0.002;
@@ -339,6 +338,7 @@ var loop_func = function() {
         }
     } else {
 
+    
     }
 
     starship.calculate_state();
@@ -352,8 +352,9 @@ var loop_func = function() {
         if (current_time - last_car_launched >= 250) {
             last_car_launched = current_time;
             var new_car = new PhysicsObject(1, 'img/tesla.png', main_canvas, 0.05);
+            new_car.MAX_VELOCITY_MAGNITUDE = 20;
             new_car.angle = starship.angle;
-            const LAUNCH_FORCE = 150;
+            const LAUNCH_FORCE = 500;
             new_car.angular_velocity = starship.angular_velocity / 2;
             new_car.x = starship.x + 50 * Math.sin(new_car.angle);
             new_car.y = starship.y - 50 * Math.cos(new_car.angle);
