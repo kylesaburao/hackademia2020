@@ -61,6 +61,8 @@ class PhysicsObject {
         load_image(image_src, image_scale).then(image => {
             this.image = image
             this.ready = true
+            this.width = image.width
+            this.height = image.height
         })
 
         this.render = function () {
@@ -133,6 +135,15 @@ class PhysicsObject {
             }
 
             return remove_on_leave && left_region
+        }
+
+        this.has_collided = function(other_object) {
+            var this_radius = (this.width + this.height) / 2
+            var other_radius = (other_object.width + other_object.height) / 2
+            var dx = this.x - other_object.x
+            var dy = this.y - other_object.y
+            var distance = Math.sqrt((dx * dx) + (dy * dy))
+            return distance < (this_radius + other_radius) - 50
         }
     }
 }
@@ -329,13 +340,15 @@ var asteroid_data = {
     max_count: 20,
     last_launched: 0,
     min_launch_interval: 1000,
-    min_launch_interval_range: 500
+    min_launch_interval_range: 1000
+}
+
+function random_sign() {
+    return ((Math.random() < 0.5) ? 1 : -1)
 }
 
 function spawn_asteroid(canvas, physics_entities) {
-    const random_sign = function() {
-        return ((Math.random() < 0.5) ? 1 : -1)
-    }
+
 
     const max_velocity_component = 5
     const random_x = canvas.width * Math.random()
@@ -471,13 +484,13 @@ var loop_func = function() {
             new_car.dy = starship.dy
             new_car.translate_forward(LAUNCH_FORCE)
             starship.translate_rear(LAUNCH_FORCE)
-            physics_entities.vehicles.push(new_car)
+            physics_entities.projectiles.push(new_car)
         }
     }
 
     if (new Date().getTime() - asteroid_data.last_launched 
         >= asteroid_data.min_launch_interval + Math.random() * asteroid_data.min_launch_interval_range) {
-        if (asteroid_data.entities.length < asteroid_data.max_count) {
+        if (physics_entities.asteroids.length < asteroid_data.max_count) {
             spawn_asteroid(main_canvas, physics_entities)
         }
         asteroid_data.last_launched = new Date().getTime()
@@ -488,6 +501,8 @@ var loop_func = function() {
         asteroids: [],
         vehicles: []
     }
+
+    var all_entities = []
 
     physics_entities.projectiles.forEach(function(projectile, index, _) {
         projectile.calculate_state()
@@ -505,6 +520,29 @@ var loop_func = function() {
     physics_entities.vehicles.forEach(function(vehicle, index, _) {
         vehicle.calculate_state()
     })
+
+    for (var i = 0; i < physics_entities.projectiles.length; ++i) {
+        for (var j = 0; j < physics_entities.asteroids.length; ++j) {
+            if (physics_entities.projectiles[i].has_collided(physics_entities.asteroids[j])) {
+                deletion_queue.asteroids.push(j)
+                deletion_queue.projectiles.push(i)
+                controls.fuel += 2.5
+                controls.fuel = clamp(controls.fuel, 0.0, controls.max_fuel)
+            } 
+        }
+    }
+
+    for (var i = 0; i < physics_entities.vehicles.length; ++i) {
+        for (var j = 0; j < physics_entities.asteroids.length; ++j) {
+            if (physics_entities.vehicles[i].has_collided(physics_entities.asteroids[j])) {
+                deletion_queue.asteroids.push(j)
+
+                controls.fuel -= 5
+                controls.fuel = clamp(controls.fuel, 0.0, controls.max_fuel)
+                starship.angular_velocity += random_sign() * 0.025
+            } 
+        }
+    }
 
     deletion_queue.projectiles.forEach(function(index, _, _) {
         physics_entities.projectiles.splice(index, 1)
