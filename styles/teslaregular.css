@@ -1,0 +1,11 @@
+@font-face {
+    font-family: 'teslaregular';
+    src: url('../fonts/tesla-webfont.eot');
+    src: url('../fonts/tesla-webfont.eot?#iefix') format('embedded-opentype'),
+         url('../fonts/tesla-webfont.woff2') format('woff2'),
+         url('../fonts/tesla-webfont.woff') format('woff'),
+         url('../fonts/tesla-webfont.ttf') format('truetype'),
+         url('../fonts/tesla-webfont.svg#teslaregular') format('svg');
+    font-weight: normal;
+    font-style: normal;
+}

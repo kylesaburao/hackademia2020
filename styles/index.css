@@ -1,2 +1,44 @@
+html {
+    scroll-behavior: smooth; }
+
 body {
     margin: 0px; }
+
+.nas-font {
+    font-family: 'Do Hyeon', sans-serif; }
+    .ex-font {
+        font-size: 12px;
+        font-family: 'teslaregular'; }
+
+.about-company h1 {
+    font-family: 'Do Hyeon', sans-serif;
+    font-size: 96px }
+    .about-company h1 .ex-font {
+        font-size: 46px }
+
+.space-bot {
+    padding-bottom: 20px; }
+
+.space-top {
+    padding-top: 20px; }
+
+.about-mission {
+    background-image: url("../img/mars-background.jpg");
+    background-size: cover;
+    background-repeat: no-repeat;
+    background-position: center, center;
+    margin: 0px;
+    color: white;
+    text-align: center; }
+    .about-mission h1 {
+        font-size: 72px; }
+    .about-mission p {
+        padding-top: 20px;
+        font-size: 24px; }
+
+.call-to-action {
+    padding-top: 25px;
+    padding-bottom: 0px;
+    background-color: white; }
+    .call-to-action h1 {
+        font-size: 54px; }
