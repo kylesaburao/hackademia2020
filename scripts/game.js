@@ -343,6 +343,18 @@ var render_velocity_indicator = function(canvas, object, max_magnitude, keys) {
     ctx.fillText('Performance Benefit: ' + ((calculate_performance_modifier(1500, controls.score, starship) * 100) - 100)
         .toFixed(2) + '%', X_OFFSET + SIZE + 45, Y_OFFSET + 30)
     
+    ctx.font = 'bold 12px arial'
+    if (controls.jump_ready) {
+        ctx.fillText('JUMP READY', X_OFFSET + SIZE + 45, Y_OFFSET + SIZE - 75)
+    } else {
+        var seconds_remaining = (2000 - Math.abs(new Date().getTime() - controls.jump_time_fired)) / 1000
+        if (seconds_remaining > 0) {
+            ctx.fillText('COOLDOWN: ' + seconds_remaining.toFixed(2), X_OFFSET + SIZE + 45, Y_OFFSET + SIZE - 75)
+        } else {
+            ctx.fillText((5 - controls.ammo) + ' MISSILES NEEDED', X_OFFSET + SIZE + 45, Y_OFFSET + SIZE - 75)
+        }
+    }
+
     ctx.font = '12px arial'
     ctx.fillText('Missiles: ' + controls.ammo, X_OFFSET + SIZE + 45, Y_OFFSET + SIZE - 60)
     ctx.fillText('Mass: ' + (starship.mass + starship.extra_mass).toFixed(2), X_OFFSET + SIZE + 45, Y_OFFSET + SIZE - 45)
@@ -359,6 +371,7 @@ var render_velocity_indicator = function(canvas, object, max_magnitude, keys) {
             'Shift: Increase throttle',
             'Control: Decrease throttle',
             'F: Fire Model 3',
+            'J: Emergency Jump',
             'H: Toggle help',
             '',
             'Performance benefit affects:',
@@ -397,6 +410,7 @@ var controls = {
     a: false,
     s: false,
     d: false,
+    j: false,
     throttle: 1,
     fuel: 100,
     max_fuel: 100,
@@ -405,7 +419,9 @@ var controls = {
     show_controls_debounce: false,
     ammo: 10,
     ammo_regen_start_time: 0,
-    score: 1500
+    score: 1500,
+    jump_time_fired: 0,
+    jump_ready: false
 }
 
 document.onkeydown = function(e) {
@@ -437,6 +453,8 @@ document.onkeydown = function(e) {
         if (!controls.show_controls_debounce) {
             controls.show_controls_debounce = true
         }
+    } else if (e.keyCode == 74) {
+        controls.j = true;
     }
 }
 document.onkeyup = function(e) {
@@ -467,6 +485,8 @@ document.onkeyup = function(e) {
     } else if (e.keyCode == 72) {
         controls.show_controls_debounce = false
         controls.show_controls = !controls.show_controls
+    } else if (e.keyCode == 74) {
+        controls.j = false
     }
 }
 
@@ -476,7 +496,8 @@ var last_car_launched = 0
 var asteroid_data = {
     entities: [],
     image_srcs: ['../img/target/asteroid_1.png', '../img/target/asteroid_2.png', '../img/target/asteroid_3.png'
-        , '../img/target/asteroid_4.png', '../img/target/bezos_1.png', '../img/target/mars_1.png'
+        , '../img/target/asteroid_4.png', '../img/target/bezos_1.png', '../img/target/new_glenn.png'
+        , '../img/target/new_shepard.png'
     ],
     max_count: 20,
     last_launched: 0,
@@ -522,7 +543,7 @@ function spawn_asteroid(canvas, starship) {
         asteroid.angular_velocity = random_rotational_velocity
         asteroid.angle = random_rotation
 
-        if (starship.distance_to(asteroid) >= 350) {
+        if (starship.distance_to(asteroid) >= 250) {
             done = true
         } else {
             console.log('retry asteroid spawn')
@@ -660,6 +681,22 @@ var loop_func = function() {
                 physics_entities.projectiles.push(new_car)
             }
         }
+    }
+
+    controls.jump_ready = (new Date().getTime() - controls.jump_time_fired >= 2000) && (controls.ammo >= 5)
+
+    if (controls.j && controls.jump_ready) {
+        controls.jump_time_fired = new Date().getTime()
+        starship.x += 300 * Math.sin(starship.angle)
+        starship.y -= 300 * Math.cos(starship.angle)
+        starship.translate_forward(2500)
+        controls.ammo -= 5
+        controls.fuel -= 10
+        controls.fuel = clamp(controls.fuel, 0.0, controls.max_fuel)
+
+        var quantum_explosion_scale = 0.4 + (random_sign() * Math.random() * 0.1)
+        var quantum_explosion = make_quantum_explosion_animator(main_canvas, quantum_explosion_scale, 1, starship)
+        physics_entities.explosions.push(quantum_explosion)
     }
 
     if (new Date().getTime() - asteroid_data.last_launched 
