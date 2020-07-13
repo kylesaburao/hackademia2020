@@ -351,7 +351,19 @@ var render_velocity_indicator = function(canvas, object, max_magnitude, keys) {
         if (seconds_remaining > 0) {
             ctx.fillText('COOLDOWN: ' + seconds_remaining.toFixed(2), X_OFFSET + SIZE + 45, Y_OFFSET + SIZE - 75)
         } else {
-            ctx.fillText((5 - controls.ammo) + ' MISSILES NEEDED', X_OFFSET + SIZE + 45, Y_OFFSET + SIZE - 75)
+            var message = ''
+            var missile_offset = (5 - controls.ammo) 
+            var fuel_offset = (10 - controls.fuel)
+            if (missile_offset > 0) {
+                message += missile_offset + ' MISSILES NEEDED'
+            }
+            if (fuel_offset > 0) {
+                if (missile_offset > 0) {
+                    message += ' | '
+                }
+                message += fuel_offset.toFixed() + ' FUEL NEEDED'
+            }
+            ctx.fillText(message, X_OFFSET + SIZE + 45, Y_OFFSET + SIZE - 75)
         }
     }
 
@@ -683,7 +695,7 @@ var loop_func = function() {
         }
     }
 
-    controls.jump_ready = (new Date().getTime() - controls.jump_time_fired >= 2000) && (controls.ammo >= 5)
+    controls.jump_ready = (new Date().getTime() - controls.jump_time_fired >= 2000) && (controls.ammo >= 5) && (controls.fuel >= 10.0)
 
     if (controls.j && controls.jump_ready) {
         controls.jump_time_fired = new Date().getTime()
