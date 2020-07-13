@@ -247,6 +247,23 @@ var render_velocity_indicator = function(canvas, object, max_magnitude, keys) {
     ctx.fillText('Burn Rate: ' + (controls.fuel_burn_rate * (1000 / 16)).toFixed(2) + '/s', X_OFFSET + SIZE + 45, Y_OFFSET + SIZE - 15)
     ctx.fillText('Throttle: ' + (controls.throttle * 100).toFixed(2) + '%', X_OFFSET + SIZE + 45, Y_OFFSET + SIZE)
 
+    console.log(controls.show_controls)
+    if (controls.show_controls) {
+        var control_text = [
+            '\u2191: Main thrust',
+            '\u2190: Increase left rotation',
+            '\u2192: Increase right rotation',
+            'WASD: Translate',
+            'Shift: Increase throttle',
+            'Control: Decrease throttle',
+            'F: Fire Model 3',
+            'H: Toggle help'
+        ]
+        for (var i = 0; i < control_text.length; ++i) {
+            ctx.font = '11.5px arial'
+            ctx.fillText(control_text[i], 20, 20 + 15 * i)
+        }
+    }
 }
 
 var render = function() {
@@ -271,7 +288,9 @@ var controls = {
     throttle: 1,
     fuel: 100,
     max_fuel: 100,
-    fuel_burn_rate: 1
+    fuel_burn_rate: 1,
+    show_controls: true,
+    show_controls_debounce: false
 }
 
 document.onkeydown = function(e) {
@@ -299,6 +318,10 @@ document.onkeydown = function(e) {
         controls.s = true;
     } else if (e.keyCode == 68) {
         controls.d = true;
+    } else if (e.keyCode == 72) {
+        if (!controls.show_controls_debounce) {
+            controls.show_controls_debounce = true
+        }
     }
 }
 document.onkeyup = function(e) {
@@ -326,6 +349,9 @@ document.onkeyup = function(e) {
         controls.s = false;
     } else if (e.keyCode == 68) {
         controls.d = false;
+    } else if (e.keyCode == 72) {
+        controls.show_controls_debounce = false
+        controls.show_controls = !controls.show_controls
     }
 }
 
