@@ -555,7 +555,7 @@ function spawn_asteroid(canvas, starship) {
         asteroid.angular_velocity = random_rotational_velocity
         asteroid.angle = random_rotation
 
-        if (starship.distance_to(asteroid) >= 250) {
+        if (starship.distance_to(asteroid) >= 250 && !asteroid.clamp_region(true)) {
             done = true
         } else {
             console.log('retry asteroid spawn')
