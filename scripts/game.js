@@ -158,21 +158,6 @@ class PhysicsObject {
     }
 }
 
-// https://stackoverflow.com/questions/2450954/how-to-randomize-shuffle-a-javascript-array
-function shuffleArray(arr) {
-    var array = arr.slice()
-
-    for (var i = array.length - 1; i > 0; i--) {
-        var j = Math.floor(Math.random() * (i + 1));
-        var temp = array[i];
-        array[i] = array[j];
-        array[j] = temp;
-    }
-
-    console.log(array)
-    return array
-}
-
 class PhysicsShortAnimation {
     constructor(canvas, image_list, scale, loops, physics_src) {
 
@@ -245,6 +230,17 @@ function make_explosion_animator(canvas, scale, loops, physics_src) {
     var IMAGE_LIST = []
     for (var i = 1; i <= 17; ++i){
         IMAGE_LIST.push('../img/explosion/' + i.valueOf() + '.png')
+    }
+    return new PhysicsShortAnimation(canvas, IMAGE_LIST, scale, loops, physics_src)
+}
+
+function make_quantum_explosion_animator(canvas, scale, loops, physics_src) {
+    var IMAGE_LIST = []
+    for (var i = 1; i <= 9; ++i){
+        IMAGE_LIST.push('../img/explosion/in' + i.valueOf() + '.png')
+    }
+    for (var i = 8; i >= 1; --i){
+        IMAGE_LIST.push('../img/explosion/in' + i.valueOf() + '.png')
     }
     return new PhysicsShortAnimation(canvas, IMAGE_LIST, scale, loops, physics_src)
 }
@@ -503,7 +499,7 @@ function random_sign() {
     return ((Math.random() < 0.5) ? 1 : -1)
 }
 
-function spawn_asteroid(canvas, starship, physics_entities) {
+function spawn_asteroid(canvas, starship) {
 
     var done = false
     const max_velocity_component = 5
@@ -533,7 +529,7 @@ function spawn_asteroid(canvas, starship, physics_entities) {
         }
     }
 
-    physics_entities.asteroids.push(asteroid)
+    return asteroid
 }
 
 class AutopilotData {
@@ -670,7 +666,11 @@ var loop_func = function() {
     if (new Date().getTime() - asteroid_data.last_launched 
         >= asteroid_data.min_launch_interval + Math.random() * asteroid_data.min_launch_interval_range) {
         if (physics_entities.asteroids.length < asteroid_data.max_count) {
-            spawn_asteroid(main_canvas, starship, physics_entities)
+            var new_asteroid = spawn_asteroid(main_canvas, starship)
+            physics_entities.asteroids.push(new_asteroid)
+            var quantum_explosion_scale = 0.5 + (random_sign() * Math.random() * 0.1)
+            var quantum_explosion = make_quantum_explosion_animator(main_canvas, quantum_explosion_scale, 1, new_asteroid)
+            physics_entities.explosions.push(quantum_explosion)
         }
         asteroid_data.last_launched = new Date().getTime()
     }
@@ -681,6 +681,13 @@ var loop_func = function() {
         vehicles: [],
         explosions: []
     }
+
+    physics_entities.explosions.forEach(function(explosion, index,_) {
+        explosion.calculate_state()
+        if (explosion.clamp_region() || explosion.loops_left <= 0) {
+            deletion_queue.explosions.push(index)
+        }
+    })
 
     physics_entities.projectiles.forEach(function(projectile, index, _) {
         projectile.calculate_state()
@@ -698,12 +705,6 @@ var loop_func = function() {
     physics_entities.vehicles.forEach(function(vehicle, _, _) {
         vehicle.calculate_state()
     })
-    physics_entities.explosions.forEach(function(explosion, index,_) {
-        explosion.calculate_state()
-        if (explosion.clamp_region() || explosion.loops_left <= 0) {
-            deletion_queue.explosions.push(index)
-        }
-    })
 
     for (var i = 0; i < physics_entities.projectiles.length; ++i) {
         for (var j = 0; j < physics_entities.asteroids.length; ++j) {
@@ -714,7 +715,8 @@ var loop_func = function() {
                 controls.fuel = clamp(controls.fuel, 0.0, controls.max_fuel)
                 controls.score += 10
 
-                var explosion = make_explosion_animator(main_canvas, 0.75, 1, physics_entities.asteroids[j])
+                var explosion_scale = 1.5 + (random_sign() * Math.random() * 0.25)
+                var explosion = make_explosion_animator(main_canvas, explosion_scale, 1, physics_entities.asteroids[j])
                 physics_entities.explosions.push(explosion)
             } 
         }
