@@ -8,7 +8,10 @@ window.addEventListener('resize', function (){
     main_canvas.width = window.innerWidth
     main_canvas.height = window.innerHeight
     }, 
-    false)
+    false
+)
+
+var background_music = new Audio('../audio/spacex.mp3')
 
 function clamp(x, min, max) {
     if (x < min) {
@@ -137,13 +140,16 @@ class PhysicsObject {
             return remove_on_leave && left_region
         }
 
+        this.distance_to = function(other_object) {
+            var dx = this.x - other_object.x
+            var dy = this.y - other_object.y
+            return Math.sqrt((dx * dx) + (dy * dy))
+        }
+
         this.has_collided = function(other_object) {
             var this_radius = (this.width + this.height) / 2
             var other_radius = (other_object.width + other_object.height) / 2
-            var dx = this.x - other_object.x
-            var dy = this.y - other_object.y
-            var distance = Math.sqrt((dx * dx) + (dy * dy))
-            return distance < (this_radius + other_radius) - 50
+            return this.distance_to(other_object) < (this_radius + other_radius) - 25
         }
     }
 }
@@ -216,7 +222,7 @@ var render_velocity_indicator = function(canvas, object, max_magnitude, keys) {
     ctx.fillText('v: ' + object.velocity.toFixed(2)
         + ', dx: ' + object.dx.toFixed(2)
         + ', dy: ' + object.dy.toFixed(2)
-        + ', \u03b8:' + object.angle.toFixed(2)
+        + ', \u03b8: ' + object.angle.toFixed(2)
         + ', \u03C9: ' + (object.angular_velocity * (1000 / 16)).toFixed(2)
         , X_OFFSET, Y_OFFSET - 30)
 
@@ -241,13 +247,18 @@ var render_velocity_indicator = function(canvas, object, max_magnitude, keys) {
     ctx.lineTo(X_OFFSET + SIZE + 35, Y_OFFSET + SIZE - (SIZE * (controls.fuel / controls.max_fuel)))
     ctx.stroke()
 
+    ctx.font = 'bold 13px arial'
+    ctx.fillText('Tesla Stock: $' + controls.score.toFixed(2), X_OFFSET + SIZE + 45, Y_OFFSET + 15)
+    ctx.fillText('Performance Benefit: ' + ((calculate_performance_modifier(1500, controls.score, starship) * 100) - 100)
+        .toFixed(2) + '%', X_OFFSET + SIZE + 45, Y_OFFSET + 30)
+    
     ctx.font = '12px arial'
+    ctx.fillText('Missiles: ' + controls.ammo, X_OFFSET + SIZE + 45, Y_OFFSET + SIZE - 60)
     ctx.fillText('Mass: ' + (starship.mass + starship.extra_mass).toFixed(2), X_OFFSET + SIZE + 45, Y_OFFSET + SIZE - 45)
     ctx.fillText('Fuel: ' + controls.fuel.toFixed(2), X_OFFSET + SIZE + 45, Y_OFFSET + SIZE - 30)
     ctx.fillText('Burn Rate: ' + (controls.fuel_burn_rate * (1000 / 16)).toFixed(2) + '/s', X_OFFSET + SIZE + 45, Y_OFFSET + SIZE - 15)
     ctx.fillText('Throttle: ' + (controls.throttle * 100).toFixed(2) + '%', X_OFFSET + SIZE + 45, Y_OFFSET + SIZE)
 
-    console.log(controls.show_controls)
     if (controls.show_controls) {
         var control_text = [
             '\u2191: Main thrust',
@@ -257,7 +268,17 @@ var render_velocity_indicator = function(canvas, object, max_magnitude, keys) {
             'Shift: Increase throttle',
             'Control: Decrease throttle',
             'F: Fire Model 3',
-            'H: Toggle help'
+            'H: Toggle help',
+            '',
+            'Performance benefit affects:',
+            '- Main thrust fuel burn rate',
+            '- Model 3 missile regeneration',
+            '- Model 3 missile speed',
+            '',
+            'Performance benefit is affected by:',
+            '- Tesla stock price',
+            '- Starship velocity',
+            '- Starship angular velocity'
         ]
         for (var i = 0; i < control_text.length; ++i) {
             ctx.font = '11.5px arial'
@@ -290,7 +311,10 @@ var controls = {
     max_fuel: 100,
     fuel_burn_rate: 1,
     show_controls: true,
-    show_controls_debounce: false
+    show_controls_debounce: false,
+    ammo: 10,
+    ammo_regen_start_time: 0,
+    score: 1500
 }
 
 document.onkeydown = function(e) {
@@ -365,34 +389,54 @@ var asteroid_data = {
     ],
     max_count: 20,
     last_launched: 0,
-    min_launch_interval: 1000,
+    min_launch_interval: 750,
     min_launch_interval_range: 1000
+}
+
+function pythagorean_c(x, y) {
+    return Math.sqrt(x *x + y * y)
+}
+
+function calculate_performance_modifier(base, current, starship) {
+    score = clamp(current / base, 0.0, 1.1)
+    score += 0.1 * (starship.velocity / pythagorean_c(starship.MAX_VELOCITY_MAGNITUDE, starship.MAX_VELOCITY_MAGNITUDE))
+    score += 0.2 * (Math.abs(starship.angular_velocity) / starship.MAX_ANGULAR_MAGNITUDE)
+    return score
 }
 
 function random_sign() {
     return ((Math.random() < 0.5) ? 1 : -1)
 }
 
-function spawn_asteroid(canvas, physics_entities) {
+function spawn_asteroid(canvas, starship, physics_entities) {
 
-
+    var done = false
     const max_velocity_component = 5
-    const random_x = canvas.width * Math.random()
-    const random_y = canvas.height * Math.random()
-    const random_dx =  random_sign() * (Math.random() * max_velocity_component)
-    const random_dy = random_sign() * (Math.random() * max_velocity_component)
-    const random_rotational_velocity = random_sign() * (Math.random() * 0.01)
-    const random_rotation = random_sign() * Math.random() * 2 * Math.PI
-    const random_mass = clamp(Math.random() * 5000, 100, 5000)
-    const random_img_src = asteroid_data.image_srcs[Math.floor(Math.random() * asteroid_data.image_srcs.length)]
 
-    var asteroid = new PhysicsObject(random_mass, random_img_src, canvas, 0.20)
-    asteroid.x = random_x
-    asteroid.y = random_y
-    asteroid.dx = random_dx
-    asteroid.dy = random_dy
-    asteroid.angular_velocity = random_rotational_velocity
-    asteroid.angle = random_rotation
+    while (!done) {
+        const random_x = canvas.width * Math.random()
+        const random_y = canvas.height * Math.random()
+        const random_dx =  random_sign() * (Math.random() * max_velocity_component)
+        const random_dy = random_sign() * (Math.random() * max_velocity_component)
+        const random_rotational_velocity = random_sign() * (Math.random() * 0.01)
+        const random_rotation = random_sign() * Math.random() * 2 * Math.PI
+        const random_mass = clamp(Math.random() * 5000, 100, 5000)
+        const random_img_src = asteroid_data.image_srcs[Math.floor(Math.random() * asteroid_data.image_srcs.length)]
+
+        var asteroid = new PhysicsObject(random_mass, random_img_src, canvas, 0.20)
+        asteroid.x = random_x
+        asteroid.y = random_y
+        asteroid.dx = random_dx
+        asteroid.dy = random_dy
+        asteroid.angular_velocity = random_rotational_velocity
+        asteroid.angle = random_rotation
+
+        if (starship.distance_to(asteroid) >= 350) {
+            done = true
+        } else {
+            console.log('retry asteroid spawn')
+        }
+    }
 
     physics_entities.asteroids.push(asteroid)
 }
@@ -454,9 +498,9 @@ var loop_func = function() {
     controls.throttle = clamp(controls.throttle, 0.40, 1.0)
 
     if (controls.left) {
-        starship.angular_velocity -= 0.002
+        starship.angular_velocity -= 0.0015
     } else if (controls.right) {
-        starship.angular_velocity += 0.002
+        starship.angular_velocity += 0.0015
     }
 
     const MAIN_THRUST = 100
@@ -488,6 +532,7 @@ var loop_func = function() {
         }
     }
 
+    controls.fuel_burn_rate *= (1.0 / calculate_performance_modifier(1500, controls.score, starship))
     controls.fuel -= controls.fuel_burn_rate
     controls.fuel = clamp(controls.fuel, 0.0, controls.max_fuel)
 
@@ -495,29 +540,42 @@ var loop_func = function() {
     starship.calculate_state()
     starship.clamp_region()
 
+    var current_time = new Date().getTime()
+
+    var ammo_regen_time = 1000 * (1.0 / calculate_performance_modifier(1500, controls.score, starship))
+    if (current_time - controls.ammo_regen_start_time >= ammo_regen_time) {
+        controls.ammo += 1
+        controls.ammo_regen_start_time = current_time
+    }
+    controls.ammo = clamp(controls.ammo, 0, 10)
+
     if (controls.f) {
-        var current_time = new Date().getTime()
-        if (current_time - last_car_launched >= 250) {
-            last_car_launched = current_time
-            var new_car = new PhysicsObject(1, '../img/tesla.png', main_canvas, 0.05)
-            new_car.MAX_VELOCITY_MAGNITUDE = 50
-            new_car.angle = starship.angle
-            const LAUNCH_FORCE = 15
-            new_car.angular_velocity = starship.angular_velocity / 2
-            new_car.x = starship.x + 50 * Math.sin(new_car.angle)
-            new_car.y = starship.y - 50 * Math.cos(new_car.angle)
-            new_car.dx = starship.dx
-            new_car.dy = starship.dy
-            new_car.translate_forward(LAUNCH_FORCE)
-            starship.translate_rear(LAUNCH_FORCE)
-            physics_entities.projectiles.push(new_car)
+        if (controls.ammo > 0) {
+
+            if (current_time - last_car_launched >= 250) {
+                controls.ammo -= 1
+
+                last_car_launched = current_time
+                var new_car = new PhysicsObject(5, '../img/tesla.png', main_canvas, 0.05)
+                new_car.MAX_VELOCITY_MAGNITUDE = 50
+                new_car.angle = starship.angle
+                const LAUNCH_FORCE = 100 * calculate_performance_modifier(1500, controls.score, starship)
+                new_car.angular_velocity = starship.angular_velocity / 2
+                new_car.x = starship.x + 50 * Math.sin(new_car.angle)
+                new_car.y = starship.y - 50 * Math.cos(new_car.angle)
+                new_car.dx = starship.dx
+                new_car.dy = starship.dy
+                new_car.translate_forward(LAUNCH_FORCE)
+                starship.translate_rear(LAUNCH_FORCE)
+                physics_entities.projectiles.push(new_car)
+            }
         }
     }
 
     if (new Date().getTime() - asteroid_data.last_launched 
         >= asteroid_data.min_launch_interval + Math.random() * asteroid_data.min_launch_interval_range) {
         if (physics_entities.asteroids.length < asteroid_data.max_count) {
-            spawn_asteroid(main_canvas, physics_entities)
+            spawn_asteroid(main_canvas, starship, physics_entities)
         }
         asteroid_data.last_launched = new Date().getTime()
     }
@@ -554,6 +612,7 @@ var loop_func = function() {
                 deletion_queue.projectiles.push(i)
                 controls.fuel += 2.5
                 controls.fuel = clamp(controls.fuel, 0.0, controls.max_fuel)
+                controls.score += 10
             } 
         }
     }
@@ -566,6 +625,9 @@ var loop_func = function() {
                 controls.fuel -= 5
                 controls.fuel = clamp(controls.fuel, 0.0, controls.max_fuel)
                 starship.angular_velocity += random_sign() * 0.025
+
+                controls.score -= 25
+                controls.score = clamp(controls.score, 0, 10000000)
             } 
         }
     }
@@ -596,4 +658,23 @@ var loop_func = function() {
 }
 
 console.log('hi')
-loop_func()
+
+function wait_for_start() {
+    var started = controls.space
+    if (started) {
+        background_music.play()
+        background_music.volume = 0.25
+        background_music.loop = true
+        loop_func()
+    } else {
+        canvas_reset()
+        canvas_context.fillStyle = 'white'
+        canvas_context.font = '50px arial'
+        var max_width = main_canvas.width / 3
+        canvas_context.fillText('Press SPACE to start', main_canvas.width / 2 - max_width / 2.5, main_canvas.height / 2, max_width)
+        canvas_context.strokeText('Press SPACE to start', main_canvas.width / 2 - max_width / 2.5, main_canvas.height / 2, max_width)
+        setTimeout(wait_for_start, 16)
+    }
+}
+
+wait_for_start()
