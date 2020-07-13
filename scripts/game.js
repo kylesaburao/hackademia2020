@@ -499,8 +499,8 @@ function random_sign() {
     return ((Math.random() < 0.5) ? 1 : -1)
 }
 
-function spawn_asteroid(canvas, starship) {
 
+function spawn_asteroid(canvas, starship) {
     var done = false
     const max_velocity_component = 5
 
@@ -528,7 +528,6 @@ function spawn_asteroid(canvas, starship) {
             console.log('retry asteroid spawn')
         }
     }
-
     return asteroid
 }
 
@@ -714,7 +713,6 @@ var loop_func = function() {
                 controls.fuel += 2.5
                 controls.fuel = clamp(controls.fuel, 0.0, controls.max_fuel)
                 controls.score += 10
-
                 var explosion_scale = 1.5 + (random_sign() * Math.random() * 0.25)
                 var explosion = make_explosion_animator(main_canvas, explosion_scale, 1, physics_entities.asteroids[j])
                 physics_entities.explosions.push(explosion)
@@ -733,10 +731,9 @@ var loop_func = function() {
 
                 controls.score -= 25
                 controls.score = clamp(controls.score, 0, 10000000)
-
-                
                 var explosion = make_explosion_animator(main_canvas, 0.5, 1, starship)
                 physics_entities.explosions.push(explosion)
+
             } 
         }
     }
