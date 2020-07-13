@@ -27,9 +27,9 @@ async function load_image(url, scale_factor) {
     let img
     const load_promise = new Promise(resolve => {
         img = new Image()
-        img.onload =  resolve
+        img.onload = resolve
+        console.log('Loading URL ' + url)
         img.src = url
-
     })
 
     await load_promise
@@ -62,11 +62,15 @@ class PhysicsObject {
         this.MAX_VELOCITY_MAGNITUDE = 10
 
         load_image(image_src, image_scale).then(image => {
+            this.update_image(image) 
+        })
+
+        this.update_image = function(image) {
             this.image = image
             this.ready = true
             this.width = image.width
             this.height = image.height
-        })
+        }
 
         this.render = function () {
             if (this.ready) {
@@ -152,6 +156,97 @@ class PhysicsObject {
             return this.distance_to(other_object) < (this_radius + other_radius) - 25
         }
     }
+}
+
+// https://stackoverflow.com/questions/2450954/how-to-randomize-shuffle-a-javascript-array
+function shuffleArray(arr) {
+    var array = arr.slice()
+
+    for (var i = array.length - 1; i > 0; i--) {
+        var j = Math.floor(Math.random() * (i + 1));
+        var temp = array[i];
+        array[i] = array[j];
+        array[j] = temp;
+    }
+
+    console.log(array)
+    return array
+}
+
+class PhysicsShortAnimation {
+    constructor(canvas, image_list, scale, loops, physics_src) {
+
+        this.physicsObject = null
+        this.images = []
+        this.image_index = 0
+        this.loops_left = loops
+        this.images_left = image_list.length.valueOf()
+
+        this.init_image = function(image_list, index) {
+            var src = image_list[index].valueOf()
+            load_image(src, scale).then(image => {
+                this.images.push(image)
+                this.images_left -= 1
+
+                if (index == 0) {
+                    this.physicsObject = new PhysicsObject(1.0, src, canvas, scale)
+                    this.physicsObject.x = physics_src.x
+                    this.physicsObject.y = physics_src.y
+                    this.physicsObject.dx = physics_src.dx
+                    this.physicsObject.dy = physics_src.dy
+                    this.physicsObject.angle = physics_src.angle
+                    this.physicsObject.angular_velocity = physics_src.angular_velocity
+                }
+            })
+        }
+
+        this.init = function() {
+            this.images_left = image_list.length
+            for (var i = 0; i < image_list.length; ++i) {
+                var current_i = i.valueOf()
+                console.log('copy ' + current_i)
+                this.init_image(image_list, current_i)
+            }
+        }
+
+        this.init()
+
+        this.calculate_state = function() {
+            if (this.physicsObject != null) {
+                this.physicsObject.calculate_state()
+            }
+        }
+
+        this.clamp_region = function(remove_on_leave) {
+            return this.physicsObject != null && this.physicsObject.clamp_region(remove_on_leave)
+        }
+
+        this.render = function() {
+            if (this.loops_left > 0 && this.images_left == 0) {
+                if (this.physicsObject != null) {
+                    this.physicsObject.render()
+                }
+                this.image_index += 1
+                if (this.image_index >= this.images.length) {
+                    this.image_index = 0
+                    this.loops_left -= 1
+                }
+                if (this.physicsObject != null) {
+                    this.physicsObject.update_image(this.images[this.image_index])
+                }
+            }
+        }
+
+
+    }
+}
+
+function make_explosion_animator(canvas, scale, loops, physics_src) {
+    var IMAGE_LIST = []
+    for (var i = 1; i <= 17; ++i){
+        IMAGE_LIST.push('../img/explosion/' + i.valueOf() + '.png')
+    }
+    return new PhysicsShortAnimation(canvas, IMAGE_LIST, scale, loops, physics_src)
 }
 
 const max_velocity_component = 25
@@ -479,11 +574,11 @@ var autopilot = new AutopilotData(starship)
 var physics_entities = {
     vehicles: [],
     projectiles: [],
-    asteroids: []
+    asteroids: [],
+    explosions: []
 }
 
 physics_entities.vehicles.push(starship)
-
 
 var loop_func = function() {
     canvas_reset()
@@ -583,10 +678,9 @@ var loop_func = function() {
     var deletion_queue = {
         projectiles: [],
         asteroids: [],
-        vehicles: []
+        vehicles: [],
+        explosions: []
     }
-
-    var all_entities = []
 
     physics_entities.projectiles.forEach(function(projectile, index, _) {
         projectile.calculate_state()
@@ -601,8 +695,14 @@ var loop_func = function() {
             deletion_queue.asteroids.push(index)
         }
     })
-    physics_entities.vehicles.forEach(function(vehicle, index, _) {
+    physics_entities.vehicles.forEach(function(vehicle, _, _) {
         vehicle.calculate_state()
+    })
+    physics_entities.explosions.forEach(function(explosion, index,_) {
+        explosion.calculate_state()
+        if (explosion.clamp_region() || explosion.loops_left <= 0) {
+            deletion_queue.explosions.push(index)
+        }
     })
 
     for (var i = 0; i < physics_entities.projectiles.length; ++i) {
@@ -613,6 +713,9 @@ var loop_func = function() {
                 controls.fuel += 2.5
                 controls.fuel = clamp(controls.fuel, 0.0, controls.max_fuel)
                 controls.score += 10
+
+                var explosion = make_explosion_animator(main_canvas, 0.75, 1, physics_entities.asteroids[j])
+                physics_entities.explosions.push(explosion)
             } 
         }
     }
@@ -628,6 +731,10 @@ var loop_func = function() {
 
                 controls.score -= 25
                 controls.score = clamp(controls.score, 0, 10000000)
+
+                
+                var explosion = make_explosion_animator(main_canvas, 0.5, 1, starship)
+                physics_entities.explosions.push(explosion)
             } 
         }
     }
@@ -641,6 +748,9 @@ var loop_func = function() {
     deletion_queue.vehicles.forEach(function(index, _, _) {
         physics_entities.vehicles.splice(index, 1)
     })
+    deletion_queue.explosions.forEach(function(index, _, _) {
+        physics_entities.explosions.splice(index, 1)
+    })
 
     physics_entities.projectiles.forEach(function(projectile, index, _) {
         projectile.render()
@@ -650,6 +760,9 @@ var loop_func = function() {
     })
     physics_entities.vehicles.forEach(function(vehicle, index, _) {
         vehicle.render()
+    })
+    physics_entities.explosions.forEach(function(explosion, index, _) {
+        explosion.render()
     })
 
     render_velocity_indicator(main_canvas, starship, 10, controls)
