@@ -712,7 +712,13 @@ var loop_func = function() {
                 deletion_queue.projectiles.push(i)
                 controls.fuel += 2.5
                 controls.fuel = clamp(controls.fuel, 0.0, controls.max_fuel)
-                controls.score += 10
+                
+                if (!physics_entities.asteroids[j].image.src.includes('mars')) {
+                    controls.score += 10
+                } else {
+                    controls.score -= 50
+                }
+
                 var explosion_scale = 1.5 + (random_sign() * Math.random() * 0.25)
                 var explosion = make_explosion_animator(main_canvas, explosion_scale, 1, physics_entities.asteroids[j])
                 physics_entities.explosions.push(explosion)
@@ -728,7 +734,6 @@ var loop_func = function() {
                 controls.fuel -= 5
                 controls.fuel = clamp(controls.fuel, 0.0, controls.max_fuel)
                 starship.angular_velocity += random_sign() * 0.025
-
                 controls.score -= 25
                 controls.score = clamp(controls.score, 0, 10000000)
                 var explosion = make_explosion_animator(main_canvas, 0.5, 1, starship)
