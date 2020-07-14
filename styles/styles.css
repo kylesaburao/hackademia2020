@@ -4,6 +4,7 @@
     background-image: url('../img/mars-background.jpg');
     background-position: center;
     margin: 0px;
+    background-size: cover;
 }
 
 body {
